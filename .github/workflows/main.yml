@@ -1,0 +1,25 @@
+name: Run LinkedIn Job Scraper
+
+on:
+  workflow_dispatch: # Allows manual triggering
+  schedule:
+    - cron: '0 8 * * *' # Runs at 8:00 AM UTC every day
+
+jobs:
+  run-scraper:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create .env file
+        run: |
+          echo "OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" >> .env
+          echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
+          echo "TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}" >> .env
+
+      - name: Create cookies.json file
+        run: echo "${{ secrets.COOKIES_JSON }}" > cookies.json
+
+      - name: Run scraper
+        run: docker-compose up --build 
