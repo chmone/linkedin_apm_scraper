@@ -64,7 +64,7 @@ def review_content(job: Job, resume_suggestions: str, cover_letter: str, config)
     try:
         print(f"Reviewing content for: {job.title}...")
         response = client.chat.completions.create(
-            model="google/gemini-pro-2.5",
+            model="google/gemini-pro-1.5",
             messages=[
                 {"role": "user", "content": prompt}
             ]
