@@ -69,20 +69,27 @@ def run_workflow(jobs: list[Job], config) -> list[list[str]]:
                 
                 if is_good:
                     # Approved or final attempt
-                    message_part_1 = f"""
-                    **New Qualified Job Found!** (Attempt: {attempt + 1}/3)
+                    job_alert_message = f"""
+                    **New Qualified Job Found!**
+
                     **Job Title:** {job.title}
                     **Company:** {job.company}
                     **Location:** {job.location}
                     **URL:** {job.url}
+                    """
+                    resume_suggestions_message = f"""
                     --- RESUME SUGGESTIONS ---
                     {resume_suggestions}
                     """
-                    message_part_2 = f"""
+                    cover_letter_message = f"""
                     --- COVER LETTER DRAFT ---
                     {cover_letter}
                     """
-                    final_message_groups.append([message_part_1, message_part_2])
+                    final_message_groups.append([
+                        job_alert_message, 
+                        resume_suggestions_message, 
+                        cover_letter_message
+                    ])
                     save_sent_job(job.url)
                     break # Exit attempt loop on success
                 else:
