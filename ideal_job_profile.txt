@@ -1,0 +1,29 @@
+## Role & Seniority
+- **Primary Titles:** Product Manager, Associate Product Manager (APM), Technical Product Manager, Product Owner, Product Analyst
+- **Level:** Entry-level to Mid-level (0-5 years of dedicated product management experience).
+- **Keywords:** "Product," "Agile," "Roadmap," "User Stories," "Customer-centric."
+
+## Industry & Company
+- **Primary Industries:** Technology (SaaS, B2C, B2B), FinTech, HealthTech.
+- **Company Size:** Startups, mid-sized companies, and tech-forward large corporations.
+- **Culture:** Strong product-led culture, data-driven decision-making, collaborative environment.
+
+## Responsibilities & Skills
+- **Core Responsibilities:**
+  - Owning the product roadmap and strategy for a specific feature or product area.
+  - Conducting user research, and market analysis, and gathering requirements.
+  - Writing clear user stories and acceptance criteria.
+  - Prioritizing backlog items and managing development sprints with engineering teams.
+  - Collaborating with design, engineering, marketing, and sales teams.
+  - Defining and analyzing metrics that inform the success of products.
+  - Managing the entire product lifecycle from concept to launch and iteration.
+- **Key Skills:**
+  - **Product:** Agile/Scrum methodologies, Roadmapping, A/B Testing, User Research, Data Analysis.
+  - **Tools:** JIRA, Confluence, Analytics platforms (e.g., Amplitude, Mixpanel, Google Analytics).
+  - **Soft Skills:** Excellent communication, leadership, cross-functional collaboration, problem-solving, business acumen.
+
+## Exclusions (What to avoid)
+- **Senior Roles:** Avoid titles like "Senior PM," "Lead PM," "Group PM," "Director of Product," or "Head of Product."
+- **High Experience Requirements:** Skip roles requiring more than 5-6 years of experience.
+- **Niche Industries:** Avoid roles in highly specialized, non-tech industries unless they have a strong software component (e.g., manufacturing, oil & gas).
+- **Heavy Specialization:** Avoid roles that require deep, mandatory expertise in a niche field like Machine Learning, AI, or specific hardware unless it aligns with the resume.
