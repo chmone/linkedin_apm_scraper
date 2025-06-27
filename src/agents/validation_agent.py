@@ -1,7 +1,7 @@
 # This file will contain the Job Validation Agent.
 # This agent will take a Job object and the ideal_job_profile.txt
 # and determine if the job is a good fit.
-import google.generativeai as genai
+from openrouter import Client
 from scraper.models import Job
 
 def validate_job(job: Job, config) -> bool:
@@ -15,12 +15,11 @@ def validate_job(job: Job, config) -> bool:
     Returns:
         True if the job is a good fit, False otherwise.
     """
-    if not config.google_api_key:
-        print("Skipping validation: GOOGLE_API_KEY not configured.")
+    if not config.openrouter_api_key:
+        print("Skipping validation: OPENROUTER_API_KEY not configured.")
         return False
 
-    genai.configure(api_key=config.google_api_key)
-    model = genai.GenerativeModel('gemini-2.5-pro-latest')
+    client = Client(api_key=config.openrouter_api_key)
 
     prompt = f"""
     Based on the following ideal job profile and the provided job description, please determine if this job is a good fit.
@@ -38,8 +37,13 @@ def validate_job(job: Job, config) -> bool:
 
     try:
         print(f"Validating job: {job.title}...")
-        response = model.generate_content(prompt)
-        answer = response.text.strip().upper()
+        response = client.chat.completions.create(
+            model="google/gemini-pro-2.5",
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
+        )
+        answer = response.choices[0].message.content.strip().upper()
         print(f"Model validation result: {answer}")
         
         return "YES" in answer

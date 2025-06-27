@@ -39,8 +39,8 @@ class Config:
         """Loads all configuration data from files."""
         # Load environment variables from .env file
         load_dotenv()
+        self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
         self.telegram_api_key = os.getenv("TELEGRAM_API_KEY")
-        self.google_api_key = os.getenv("GOOGLE_API_KEY")
 
         self.search_urls = self._load_file("search_urls.txt").splitlines()
         self.cookies_file = "cookies.json"  # Store the path, not the content
@@ -48,10 +48,10 @@ class Config:
         self.ideal_job_profile = self._load_file("ideal_job_profile.txt")
         self.writing_style_samples = self._load_writing_samples("writing_style_samples")
         
-        # Load Google API Key from environment variables
-        self.google_api_key = os.getenv("GOOGLE_API_KEY")
-        if not self.google_api_key:
-            logging.warning("GOOGLE_API_KEY environment variable not set.")
+        # Load OpenRouter API Key from environment variables
+        self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+        if not self.openrouter_api_key:
+            logging.warning("OPENROUTER_API_KEY environment variable not set.")
 
         # Load Telegram credentials from environment variables
         self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -126,7 +126,7 @@ if __name__ == '__main__':
     os.makedirs("writing_style_samples", exist_ok=True)
     with open(".env", "w") as f:
         f.write("TELEGRAM_API_KEY=dummy_telegram_key\n")
-        f.write("GOOGLE_API_KEY=dummy_llm_key\n")
+        f.write("OPENROUTER_API_KEY=dummy_llm_key\n")
     with open("search_urls.txt", "w") as f:
         f.write("https://www.linkedin.com/jobs/search/?keywords=product%20manager\n")
     with open("cookies.json", "w") as f:
@@ -141,7 +141,7 @@ if __name__ == '__main__':
     # Proof that it works
     config = Config.get_instance()
     print(f"Telegram Key: {config.telegram_api_key}")
-    print(f"Google API Key: {config.google_api_key}")
+    print(f"OpenRouter API Key: {config.openrouter_api_key}")
     print(f"Search URLs: {config.search_urls}")
     print(f"Resume: {config.resume_data}")
     print(f"Writing Samples: {config.writing_style_samples}")

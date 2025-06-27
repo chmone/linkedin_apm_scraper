@@ -2,7 +2,7 @@
 # This agent will take the generated content and review it
 # for quality, tone, and accuracy. It can send it back to the
 # generation agent if it needs improvement.
-import google.generativeai as genai
+from openrouter import Client
 from scraper.models import Job
 
 def review_content(job: Job, resume_suggestions: str, cover_letter: str, config) -> tuple:
@@ -18,13 +18,12 @@ def review_content(job: Job, resume_suggestions: str, cover_letter: str, config)
     Returns:
         A tuple containing a boolean decision and a reason string.
     """
-    if not config.google_api_key:
-        print("Skipping review: GOOGLE_API_KEY not configured.")
+    if not config.openrouter_api_key:
+        print("Skipping review: OPENROUTER_API_KEY not configured.")
         # Default to True to not block the pipeline if the key is missing
         return True, "Approved under fallback."
 
-    genai.configure(api_key=config.google_api_key)
-    model = genai.GenerativeModel('gemini-2.5-pro-latest')
+    client = Client(api_key=config.openrouter_api_key)
 
     prompt = f"""
     You are a professional editor and career coach. Your task is to review AI-generated content for a job application to ensure it is high quality.
@@ -61,9 +60,15 @@ def review_content(job: Job, resume_suggestions: str, cover_letter: str, config)
 
     try:
         print(f"Reviewing content for: {job.title}...")
-        response = model.generate_content(prompt)
+        response = client.chat.completions.create(
+            model="google/gemini-pro-2.5",
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
+        )
         
-        parts = response.text.split("---SPLIT---")
+        response_text = response.choices[0].message.content
+        parts = response_text.split("---SPLIT---")
         if len(parts) == 2:
             decision = parts[0].strip().upper()
             reason = parts[1].strip()
@@ -72,7 +77,7 @@ def review_content(job: Job, resume_suggestions: str, cover_letter: str, config)
         else:
             print("Warning: AI review response did not contain the expected '---SPLIT---' separator.")
             # Fallback for old format
-            is_yes = "YES" in response.text.upper()
+            is_yes = "YES" in response_text.upper()
             reason = "Could not parse review response." if not is_yes else "Approved under fallback."
             return is_yes, reason
 

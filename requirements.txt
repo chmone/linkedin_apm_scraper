@@ -1,4 +1,4 @@
-google-generativeai
+openrouter-python
 python-dotenv
 selenium
 python-telegram-bot 
