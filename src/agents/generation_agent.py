@@ -78,7 +78,7 @@ def generate_content(job: Job, config, previous_rejection_reason: str = None, is
 
     try:
         response = client.chat.completions.create(
-            model="google/gemini-pro-1.5",
+            model="google/gemini-2.5-pro",
             messages=[
                 {"role": "user", "content": prompt}
             ]

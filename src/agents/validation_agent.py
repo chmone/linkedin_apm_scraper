@@ -41,7 +41,7 @@ def validate_job(job: Job, config) -> bool:
     try:
         print(f"Validating job: {job.title}...")
         response = client.chat.completions.create(
-            model="google/gemini-pro-1.5",
+            model="google/gemini-2.5-pro",
             messages=[
                 {"role": "user", "content": prompt}
             ]

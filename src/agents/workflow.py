@@ -91,11 +91,11 @@ def run_workflow(jobs: list[Job], config) -> list[list[str]]:
                     print(f"Reason: {rejection_reason}")
                     print("*Will attempt to regenerate...*")
             
-            print("Waiting 20 seconds before processing the next job...")
-            time.sleep(20)
+            print("Waiting 2 seconds before processing the next job...")
+            time.sleep(2)
 
         except Exception as e:
-            print(f"An unexpected error occurred processing job {job.title}: {e}")
+            print(f"An error occurred processing job: {job.title} at {job.company}. Error: {e}")
             continue
 
     print("Workflow completed.")
