@@ -1,8 +1,21 @@
 # This file will orchestrate the sequence of AI agents.
 import time
+import os
 from scraper.models import Job
 from agents import validation_agent, generation_agent, review_agent
 from google.api_core import exceptions as google_exceptions
+
+SENT_JOBS_FILE = "sent_jobs.log"
+
+def load_sent_jobs():
+    if not os.path.exists(SENT_JOBS_FILE):
+        return set()
+    with open(SENT_JOBS_FILE, "r") as f:
+        return set(line.strip() for line in f)
+
+def save_sent_job(job_url):
+    with open(SENT_JOBS_FILE, "a") as f:
+        f.write(job_url + "\\n")
 
 def run_workflow(jobs: list[Job], config) -> list[list[str]]:
     """
@@ -22,8 +35,12 @@ def run_workflow(jobs: list[Job], config) -> list[list[str]]:
     
     print(f"Starting workflow for {len(jobs)} jobs.")
     final_message_groups = []
+    sent_jobs = load_sent_jobs()
 
     for job in jobs:
+        if job.url in sent_jobs:
+            print(f"Skipping already processed job: {job.title}")
+            continue
         try:
             print(f"--- Processing: {job.title} at {job.company} ---")
 
@@ -67,6 +84,7 @@ def run_workflow(jobs: list[Job], config) -> list[list[str]]:
                     {cover_letter}
                     """
                     final_message_groups.append([message_part_1, message_part_2])
+                    save_sent_job(job.url)
                     break # Exit attempt loop on success
                 else:
                     # Rejected, print to console and retry

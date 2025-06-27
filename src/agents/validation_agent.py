@@ -20,7 +20,7 @@ def validate_job(job: Job, config) -> bool:
         return False
 
     genai.configure(api_key=config.google_api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.5-pro-latest')
 
     prompt = f"""
     Based on the following ideal job profile and the provided job description, please determine if this job is a good fit.

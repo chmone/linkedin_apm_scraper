@@ -24,7 +24,7 @@ def review_content(job: Job, resume_suggestions: str, cover_letter: str, config)
         return True, "Approved under fallback."
 
     genai.configure(api_key=config.google_api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.5-pro-latest')
 
     prompt = f"""
     You are a professional editor and career coach. Your task is to review AI-generated content for a job application to ensure it is high quality.
