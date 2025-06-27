@@ -6,7 +6,7 @@
     "linkedin": "linkedin.com/in/cameron-monesmith/",
     "github": ""
   },
-  "summary": "Recent graduate with a B.S. in Business Administration (Business Analytics and Information Systems) and a minor in Computer Science. Experienced in business analysis and product management through internships at Fidelity Investments. Skilled in leveraging data with SQL, Python, and Power BI to drive efficiency and product decisions. Seeking a Product Manager role to apply a blend of technical skills and business acumen.",
+  "summary": "Founder of an AI-powered startup with a proven track record of securing funding, leading product development, and shipping an MVP. Experienced in business analysis and product management at Fidelity Investments, with a B.S. in Business Administration (Business Analytics and Information Systems) and a minor in Computer Science. Skilled in leveraging data with SQL and Python, and building products from the ground up. Seeking a Product Manager role to apply a blend of technical skills, entrepreneurial drive, and business acumen.",
   "experience": [
     {
       "title": "Business Analyst",
@@ -17,6 +17,18 @@
         "Leveraged business intelligence tools including SQL, Excel VBA, Power Automate, and Python scripts to automate 10+ daily data processing and validation tasks, reducing manual workload by 25+ hours and improving overall process efficiency by 40%",
         "Contributed to a 12-member Scrum team by providing project management to deliver a Python-based ML model that streamlined recurring fund accounting tasks, reducing effort per task by ~60% and saving ~1 hour per employee across 100+ users",
         "Designed Power BI dashboards in collaboration with auditors and product stakeholders to track performance metrics, improving data clarity by 35% and accelerating decision-making time by 20%"
+      ]
+    },
+    {
+      "title": "Founder",
+      "company": "Connect IQ",
+      "location": "Boston, MA",
+      "dates": "November 2024 – April 2025",
+      "bullet_points": [
+        "Secured $50K in pre-seed funding as a solo founder to build an AI-powered Chrome extension that scores LinkedIn connections against a user's career goals",
+        "Designed product vision and roadmap, then coded and shipped an MVP in under six months",
+        "Engineered custom LLM-agent workflows that quantify connection relevance in real time, powering personalized recommendations",
+        "Launched an automated outreach feature that lifted recruiter- and network-response rates by ≈25 % during closed beta"
       ]
     },
     {
