@@ -2,7 +2,7 @@
 # This agent will take the generated content and review it
 # for quality, tone, and accuracy. It can send it back to the
 # generation agent if it needs improvement.
-from openrouter import Client
+from openai import OpenAI
 from scraper.models import Job
 
 def review_content(job: Job, resume_suggestions: str, cover_letter: str, config) -> tuple:
@@ -23,7 +23,10 @@ def review_content(job: Job, resume_suggestions: str, cover_letter: str, config)
         # Default to True to not block the pipeline if the key is missing
         return True, "Approved under fallback."
 
-    client = Client(api_key=config.openrouter_api_key)
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=config.openrouter_api_key,
+    )
 
     prompt = f"""
     You are a professional editor and career coach. Your task is to review AI-generated content for a job application to ensure it is high quality.

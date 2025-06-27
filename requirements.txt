@@ -1,4 +1,4 @@
-openrouter-python
+openai
 python-dotenv
 selenium
 python-telegram-bot 

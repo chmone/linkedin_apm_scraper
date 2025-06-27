@@ -1,7 +1,7 @@
 # This file will contain the Job Validation Agent.
 # This agent will take a Job object and the ideal_job_profile.txt
 # and determine if the job is a good fit.
-from openrouter import Client
+from openai import OpenAI
 from scraper.models import Job
 
 def validate_job(job: Job, config) -> bool:
@@ -19,7 +19,10 @@ def validate_job(job: Job, config) -> bool:
         print("Skipping validation: OPENROUTER_API_KEY not configured.")
         return False
 
-    client = Client(api_key=config.openrouter_api_key)
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=config.openrouter_api_key,
+    )
 
     prompt = f"""
     Based on the following ideal job profile and the provided job description, please determine if this job is a good fit.

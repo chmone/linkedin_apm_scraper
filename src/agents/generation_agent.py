@@ -2,7 +2,7 @@
 # This agent will take a qualified Job object and generate
 # tailored resume bullet points and a cover letter.
 import json
-from openrouter import Client
+from openai import OpenAI
 from scraper.models import Job
 
 def generate_content(job: Job, config, previous_rejection_reason: str = None, is_last_chance: bool = False) -> tuple[str, str]:
@@ -22,7 +22,10 @@ def generate_content(job: Job, config, previous_rejection_reason: str = None, is
         print("Skipping content generation: OPENROUTER_API_KEY not configured.")
         return "Content generation skipped due to missing API key.", "Content generation skipped."
 
-    client = Client(api_key=config.openrouter_api_key)
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=config.openrouter_api_key,
+    )
 
     print(f"Generating content for: {job.title}...")
     
