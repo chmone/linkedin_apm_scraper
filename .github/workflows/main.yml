@@ -19,7 +19,9 @@ jobs:
           echo "TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}" >> .env
 
       - name: Create cookies.json file
-        run: echo "${{ secrets.COOKIES_JSON }}" > cookies.json
+        env:
+          COOKIES_JSON_CONTENT: ${{ secrets.COOKIES_JSON }}
+        run: echo "$COOKIES_JSON_CONTENT" > cookies.json
 
       - name: Run scraper
         run: docker-compose up --build 
