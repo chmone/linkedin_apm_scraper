@@ -3,7 +3,6 @@ import time
 import os
 from scraper.models import Job
 from agents import validation_agent, generation_agent, review_agent
-from google.api_core import exceptions as google_exceptions
 
 SENT_JOBS_FILE = "sent_jobs.log"
 
@@ -95,9 +94,6 @@ def run_workflow(jobs: list[Job], config) -> list[list[str]]:
             print("Waiting 20 seconds before processing the next job...")
             time.sleep(20)
 
-        except google_exceptions.ResourceExhausted as e:
-            print(f"Google AI API quota exceeded. Stopping workflow. Error: {e}")
-            break
         except Exception as e:
             print(f"An unexpected error occurred processing job {job.title}: {e}")
             continue
