@@ -50,6 +50,11 @@ class LinkedInScraper(BaseScraper):
         """
         self.driver.get(search_url)
         print(f"Navigating to search results: {search_url}")
+        
+        # Add a delay and scroll to mimic human behavior and trigger lazy-loading
+        time.sleep(5)
+        self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(2)
 
         try:
             job_list_container = self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "ul.jobs-search__results-list")))
