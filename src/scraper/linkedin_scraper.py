@@ -125,18 +125,19 @@ class LinkedInScraper(BaseScraper):
                 pass # No "see more" button
 
             description_container = self.driver.find_element(By.CSS_SELECTOR, "div#job-details")
-            description = description_container.get_attribute('innerHTML').strip()
+            description_html = description_container.get_attribute('innerHTML').strip()
+            description_text = description_container.text.strip()
             
             current_url = self.driver.current_url
             
             print(f"Successfully scraped: {title} at {company}")
-            print(f"Description snippet: {description[:150]}...")
+            print(f"Description snippet: {description_text[:150]}...")
             
             return Job(
                 title=title,
                 company=company,
                 location=location,
-                description=description,
+                description=description_html,
                 url=current_url,
                 search_url=search_url,
             )

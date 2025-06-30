@@ -17,17 +17,21 @@ def main():
     The main function to run the LinkedIn job scraper and AI workflow.
     """
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-    
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
     config = load_config()
     
     chrome_options = Options()
+    chrome_options.add_argument("--log-level=3") # Suppress logs except fatal ones.
+    chrome_options.add_experimental_option('excludeSwitches', ['enable-logging']) # Suppress DevTools messages
+    
     if config.headless:
         chrome_options.add_argument("--headless")
-    
+        chrome_options.add_argument("--disable-gpu") # Often necessary for headless on Windows
+
     # These options are generally good for stability in Docker/CI environments
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
 
     driver = webdriver.Chrome(options=chrome_options)
@@ -41,8 +45,7 @@ def main():
         for url in config.search_urls:
             logging.info(f"Scraping jobs from URL: {url}")
             try:
-                for job in scraper.scrape(url):
-                    all_jobs.append(job)
+                all_jobs.extend(scraper.scrape(url))
             except Exception as e:
                 logging.error(f"Failed to scrape from {url}: {e}", exc_info=True)
 
