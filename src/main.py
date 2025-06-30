@@ -50,7 +50,7 @@ def main():
             logging.info("No new jobs were scraped.")
         else:
             logging.info(f"Scraped a total of {len(all_jobs)} jobs. Starting AI workflow...")
-            notifier = TelegramNotifier(token=config.telegram_api_key, chat_id=config.telegram_chat_id)
+            notifier = TelegramNotifier(config)
             
             for job in all_jobs:
                 message_groups = run_workflow(job, config)
