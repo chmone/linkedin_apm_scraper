@@ -1,161 +1,135 @@
 import time
 import json
-from typing import List
+import re
+from typing import Iterator
+from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
+
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from config.config import Config
-from .base import Scraper
-from scraper.models import Job
-from selenium.common.exceptions import TimeoutException, InvalidArgumentException
+from selenium.common.exceptions import (
+    TimeoutException,
+    NoSuchElementException,
+)
 
-class LinkedInScraper(Scraper):
+from .base import BaseScraper
+from .models import Job
+
+
+class LinkedInScraper(BaseScraper):
     """
-    Scrapes job listings from LinkedIn.
+    Scrapes job listings from LinkedIn by interacting with the search results page.
+    It clicks on each job to reveal the details in a side panel and scrapes the information from there.
     """
-    def __init__(self, search_urls, cookies_file):
-        self.search_urls = search_urls
-        self.cookies_file = cookies_file
-        self.driver = self._initialize_driver()
+
+    def __init__(self, driver: webdriver.Chrome, cookies_path: str = "cookies.json"):
+        super().__init__(driver)
+        self.cookies_path = cookies_path
+        self.wait = WebDriverWait(self.driver, 10)
         self._load_cookies()
-        print("LinkedIn Scraper Initialized.")
-
-    def _initialize_driver(self):
-        """Initializes a headless Selenium WebDriver."""
-        chrome_options = webdriver.ChromeOptions()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")  # Recommended for Docker
-        chrome_options.add_argument("--window-size=1920,1080")
-        
-        try:
-            print("Initializing Chrome driver...")
-            chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-            driver = webdriver.Chrome(options=chrome_options)
-            return driver
-        except Exception as e:
-            print(f"Error initializing driver: {e}")
-            return None
 
     def _load_cookies(self):
-        """Loads session cookies into the browser."""
-        # LinkedIn requires you to be on the domain to set cookies
-        self.driver.get("https://www.linkedin.com")
+        """Loads session cookies into the browser to maintain the user's session."""
+        try:
+            # We must be on the linkedin.com domain to set cookies for it.
+            self.driver.get("https://www.linkedin.com")
+            with open(self.cookies_path, "r") as f:
+                cookies = json.load(f)
+            for cookie in cookies:
+                self.driver.add_cookie(cookie)
+            print("Successfully loaded session cookies.")
+        except FileNotFoundError:
+            print(f"Cookie file not found at '{self.cookies_path}'. Proceeding without authentication.")
+        except Exception as e:
+            print(f"An error occurred while loading cookies: {e}")
 
-        with open(self.cookies_file, 'r') as f:
-            cookies = json.load(f)
-
-        for cookie in cookies:
-            # Sanitize the 'sameSite' attribute if it's invalid
-            if 'sameSite' in cookie and cookie['sameSite'] not in ["Strict", "Lax", "None"]:
-                del cookie['sameSite']
-            self.driver.add_cookie(cookie)
-        
-        print("Cookies loaded. Page will not be refreshed.")
-
-    def scrape(self) -> List[Job]:
+    def scrape(self, search_url: str) -> Iterator[Job]:
         """
-        Scrapes LinkedIn for job postings.
+        Scrapes a LinkedIn job search URL.
+
+        Args:
+            search_url: The URL of the LinkedIn job search results page.
+
+        Yields:
+            A Job object for each successfully scraped job posting.
         """
-        self._load_cookies()
-        all_jobs = []
-
-        for url in self.search_urls:
-            if not url or not url.strip().startswith('http'):
-                print(f"Skipping invalid or empty URL: {url}")
-                continue
-
-            try:
-                print(f"Scraping search results from: {url}")
-                self.driver.get(url)
-                time.sleep(5) # Wait for page to load and modal to potentially appear
-
-                # Try to close the sign-in modal by clicking the dismiss button
-                try:
-                    print("Trying to find and click modal dismiss button with aria-label='Dismiss'...")
-                    close_button = WebDriverWait(self.driver, 5).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, "button[aria-label='Dismiss']"))
-                    )
-                    self.driver.execute_script("arguments[0].click();", close_button)
-                    print("Clicked the modal dismiss button via JavaScript.")
-                    time.sleep(2)  # wait for modal to close
-                except TimeoutException:
-                    print("Could not find modal dismiss button with aria-label='Dismiss'.")
-                except Exception as e:
-                    print(f"An error occurred while trying to close the modal: {e}")
-
-                try:
-                    # Find all job links directly on the page, waiting for at least one to be present
-                    job_links = WebDriverWait(self.driver, 10).until(
-                        EC.presence_of_all_elements_located((By.CSS_SELECTOR, "a[href*='/jobs/view/']"))
-                    )
-                    print(f"Found {len(job_links)} potential job links on the page.")
-
-                    job_urls = [link.get_attribute("href") for link in job_links]
-
-                    # Remove duplicate URLs
-                    job_urls = list(dict.fromkeys(job_urls))
-
-                    print(f"Found {len(job_urls)} unique job links on the page.")
-
-                    for job_url in job_urls:
-                        try:
-                            job = self._scrape_job_details(job_url, url)
-                            if job:
-                                all_jobs.append(job)
-                        except Exception as e:
-                            print(f"Error scraping job detail for {job_url}: {e}")
-
-                except TimeoutException as e:
-                    screenshot_path = "/app/linkedin_error_screenshot.png"
-                    print(f"Error scraping search results page {url} : {e.msg}")
-                    self.driver.save_screenshot(screenshot_path)
-                    print(f"Saved a screenshot to {screenshot_path} for debugging.")
-                except Exception as e:
-                    screenshot_path = "/app/linkedin_error_screenshot.png"
-                    print(f"An unexpected error occurred on search page {url}: {e}")
-                    self.driver.save_screenshot(screenshot_path)
-                    print(f"Saved a screenshot to {screenshot_path} for debugging.")
-
-            except InvalidArgumentException as e:
-                print(f"Invalid argument error for URL '{url}': {e.msg}")
-                print("This usually means the URL is malformed. Skipping.")
-                continue
-            except TimeoutException as e:
-                screenshot_path = "/app/linkedin_error_screenshot.png"
-                print(f"Error scraping search results page {url} : {e.msg}")
-                self.driver.save_screenshot(screenshot_path)
-                print(f"Saved a screenshot to {screenshot_path} for debugging.")
-
-        self.driver.quit()
-        print(f"Scraping complete. Found {len(all_jobs)} total jobs.")
-        return all_jobs
-
-    def _scrape_job_details(self, job_url: str, search_url: str) -> Job | None:
-        """Scrapes the details from a single job posting page."""
-        self.driver.get(job_url)
-        time.sleep(3) # Wait for page to load
+        print(f"Navigating to search URL: {search_url}")
+        self.driver.get(search_url)
 
         try:
-            title = self.driver.find_element(By.CLASS_NAME, "top-card-layout__title").text
-            company = self.driver.find_element(By.CLASS_NAME, "topcard__org-name-link").text
-            description = self.driver.find_element(By.CLASS_NAME, "show-more-less-html__markup").text
-            
-            job = Job(
-                title=title,
-                company=company,
-                url=job_url,
-                description=description,
-                search_url=search_url
+            # Wait for the main job list container to be present on the page
+            self.wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "ul.jobs-search__results-list"))
             )
-            print(f"Successfully scraped: {title} at {company}")
-            return job
+            print("Job list container found.")
+        except TimeoutException:
+            print("Timeout waiting for job list to load. Cannot continue scraping this URL.")
+            return
 
-        except Exception as e:
-            print(f"Could not extract job details from {job_url}: {e}")
-            return None
+        # We get the list of job items to iterate over
+        job_list_items = self.driver.find_elements(By.CSS_SELECTOR, "ul.jobs-search__results-list > li")
+        print(f"Found {len(job_list_items)} job items in the list.")
+
+        for index in range(len(job_list_items)):
+            try:
+                # Re-fetch the list on each iteration to prevent stale element exceptions
+                job_elements = self.driver.find_elements(By.CSS_SELECTOR, "ul.jobs-search__results-list > li")
+                if index >= len(job_elements):
+                    print("Index out of bounds, stopping iteration.")
+                    break
+                job_element = job_elements[index]
+
+                # Scroll to the element and click it to load details
+                self.driver.execute_script("arguments[0].scrollIntoView(true);", job_element)
+                time.sleep(1) # Pause for UI to settle
+                job_element.click()
+                time.sleep(1) # Pause for details to load
+
+                # Wait for the details panel to be loaded
+                details_panel = self.wait.until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, ".jobs-search__job-details--container"))
+                )
+
+                # Scrape information from the details panel
+                title = details_panel.find_element(By.CSS_SELECTOR, "h2.jobs-details-top-card__job-title").text
+                company = details_panel.find_element(By.CSS_SELECTOR, "a.jobs-details-top-card__company-url").text
+                description = details_panel.find_element(By.ID, "job-details").text
+
+                # Get the direct URL and construct the notification URL
+                href = job_element.find_element(By.CSS_SELECTOR, "a").get_attribute("href")
+                direct_url = href.split('?')[0]
+                
+                job_id_match = re.search(r'view/(\d+)/', href)
+                if not job_id_match:
+                    print(f"Could not extract job ID from URL: {href}")
+                    continue
+                job_id = job_id_match.group(1)
+
+                parsed_search_url = urlparse(search_url)
+                query_params = parse_qs(parsed_search_url.query)
+                query_params['currentJobId'] = [job_id]
+                new_query = urlencode(query_params, doseq=True)
+                search_url_with_id = urlunparse(
+                    (parsed_search_url.scheme, parsed_search_url.netloc, parsed_search_url.path, parsed_search_url.params, new_query, parsed_search_url.fragment)
+                )
+
+                print(f"Successfully scraped job: '{title}' at '{company}'")
+                yield Job(
+                    title=title,
+                    company=company,
+                    description=description,
+                    url=direct_url,
+                    search_url=search_url_with_id,
+                )
+
+            except (NoSuchElementException, TimeoutException) as e:
+                print(f"Skipping a job due to a scraping error (element not found or timeout): {e}")
+                # It's safer to just continue to the next item
+                continue
+            except Exception as e:
+                print(f"An unexpected error occurred while processing a job: {e}")
+                continue
 
 if __name__ == '__main__':
     # This is for testing the class structure
@@ -180,8 +154,8 @@ if __name__ == '__main__':
     
     try:
         test_config = Config.get_instance()
-        scraper = LinkedInScraper(search_urls=test_config.search_urls, cookies_file="cookies.json")
-        jobs = scraper.scrape()
+        scraper = LinkedInScraper(driver=webdriver.Chrome(options=webdriver.ChromeOptions()))
+        jobs = list(scraper.scrape(test_config.search_urls[0]))
         print(f"Scraper finished. Scraped {len(jobs)} jobs.")
     except Exception as e:
         print(f"Test run failed as expected (likely due to invalid cookies): {e}")

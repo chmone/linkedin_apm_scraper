@@ -3,6 +3,9 @@
 import logging
 import time
 
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options as ChromeOptions
+
 from config.config import Config
 from scraper.linkedin_scraper import LinkedInScraper
 from agents.workflow import run_workflow
@@ -14,25 +17,43 @@ def main():
     """
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+    driver = None  # Initialize driver to None
     try:
         # Get configuration
         config = Config.get_instance()
 
+        # Initialize WebDriver
+        chrome_options = ChromeOptions()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--window-size=1920,1080")
+        driver = webdriver.Chrome(options=chrome_options)
+
         # 1. Scrape Jobs
         logging.info("Starting job scraping...")
-        print("Initializing scraper...")
-        scraper = LinkedInScraper(config.search_urls, config.cookies_file)
-        print("Scraping jobs from LinkedIn...")
-        scraped_jobs = scraper.scrape()
-        print(f"Found {len(scraped_jobs)} jobs.")
+        scraper = LinkedInScraper(driver=driver, cookies_path=config.cookies_file)
+        
+        all_scraped_jobs = []
+        for url in config.search_urls:
+            if not url or not url.strip().startswith('http'):
+                logging.warning(f"Skipping invalid or empty URL: {url}")
+                continue
+            
+            logging.info(f"Scraping jobs from LinkedIn URL: {url}")
+            # The scrape method is a generator, so we extend the list with its results
+            scraped_jobs_iterator = scraper.scrape(url)
+            all_scraped_jobs.extend(list(scraped_jobs_iterator))
 
-        if not scraped_jobs:
-            logging.info("No new jobs found. Exiting.")
+        logging.info(f"Found a total of {len(all_scraped_jobs)} jobs.")
+
+        if not all_scraped_jobs:
+            logging.info("No new jobs found across all URLs. Exiting.")
             return
 
         # 2. Run Agentic Workflow
-        logging.info(f"Passing {len(scraped_jobs)} jobs to the agent workflow...")
-        final_messages = run_workflow(scraped_jobs, config)
+        logging.info(f"Passing {len(all_scraped_jobs)} jobs to the agent workflow...")
+        final_messages = run_workflow(all_scraped_jobs, config)
 
         # 3. Send Notifications
         if final_messages:
@@ -48,6 +69,10 @@ def main():
         print("AI Job Scraper finished successfully.")
     except Exception as e:
         logging.error(f"An error occurred in the main workflow: {e}", exc_info=True)
+    finally:
+        if driver:
+            logging.info("Closing the WebDriver.")
+            driver.quit()
 
 if __name__ == "__main__":
     main() 
