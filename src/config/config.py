@@ -121,36 +121,6 @@ class Config:
                 samples[filename] = self._load_text(path)
         return samples
 
-if __name__ == '__main__':
-    # Create dummy files for testing
-    os.makedirs("writing_style_samples", exist_ok=True)
-    with open(".env", "w") as f:
-        f.write("TELEGRAM_API_KEY=dummy_telegram_key\n")
-        f.write("OPENROUTER_API_KEY=dummy_llm_key\n")
-    with open("search_urls.txt", "w") as f:
-        f.write("https://www.linkedin.com/jobs/search/?keywords=product%20manager\n")
-    with open("cookies.json", "w") as f:
-        f.write('{"name": "li_at", "value": "dummy_cookie"}')
-    with open("resume.json", "w") as f:
-        f.write('{"experience": [{"title": "PM"}]}')
-    with open("ideal_job_profile.txt", "w") as f:
-        f.write("Looking for a fast-paced environment.")
-    with open("writing_style_samples/sample1.txt", "w") as f:
-        f.write("This is my writing style.")
-
-    # Proof that it works
-    config = Config.get_instance()
-    print(f"Telegram Key: {config.telegram_api_key}")
-    print(f"OpenRouter API Key: {config.openrouter_api_key}")
-    print(f"Search URLs: {config.search_urls}")
-    print(f"Resume: {config.resume_data}")
-    print(f"Writing Samples: {config.writing_style_samples}")
-
-    # Clean up dummy files
-    os.remove(".env")
-    os.remove("search_urls.txt")
-    os.remove("cookies.json")
-    os.remove("resume.json")
-    os.remove("ideal_job_profile.txt")
-    os.remove("writing_style_samples/sample1.txt")
-    os.rmdir("writing_style_samples") 
+def load_config():
+    """Factory function to get the config instance."""
+    return Config.get_instance() 
