@@ -43,7 +43,7 @@ class LinkedInScraper(BaseScraper):
         except FileNotFoundError:
             print(f"Cookie file not found at '{self.cookies_path}'. Proceeding without authentication.")
         except Exception as e:
-            print(f"An error occurred while loading cookies: {e}")
+            logging.error(f"An error occurred while loading cookies: {e}", exc_info=True)
 
     def scrape(self, search_url: str) -> Iterator[Job]:
         """
@@ -97,7 +97,10 @@ class LinkedInScraper(BaseScraper):
                 # Scroll to the element and click it to load details
                 self.driver.execute_script("arguments[0].scrollIntoView(true);", job_element)
                 time.sleep(1) # Pause for UI to settle
-                job_element.click()
+                
+                # Use a Javascript click to bypass potential overlays
+                self.driver.execute_script("arguments[0].click();", job_element)
+                
                 time.sleep(1) # Pause for details to load
 
                 # Wait for the details panel to be loaded
