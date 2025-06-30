@@ -46,7 +46,7 @@ class Config:
         self.search_urls = self._load_file("search_urls.txt").splitlines()
         self.cookies_file = "cookies.json"  # Store the path, not the content
         self.resume_data = json.loads(self._load_file("resume.json"))
-        self.ideal_job_profile = self._load_file("ideal_job_profile.txt")
+        self.ideal_job_profile = "ideal_job_profile.txt" # Store the path
         self.writing_style_samples = self._load_writing_samples("writing_style_samples")
         
         # Load OpenRouter API Key from environment variables
