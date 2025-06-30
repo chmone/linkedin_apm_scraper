@@ -48,22 +48,6 @@ class LinkedInScraper(BaseScraper):
         except Exception as e:
             print(f"An error occurred loading cookies: {e}")
 
-    def _dismiss_modal(self):
-        """Dismisses the messaging pop-up modal if it appears."""
-        try:
-            modal_button = self.wait.until(
-                EC.element_to_be_clickable(
-                    (By.CSS_SELECTOR, "button.msg-overlay-bubble-header__control--new-convo-btn")
-                )
-            )
-            modal_button.click()
-            print("Dismissed the pop-up modal.")
-        except TimeoutException:
-            print("No pop-up modal found to dismiss.")
-        except Exception as e:
-            # It's not critical if this fails, so we log and continue.
-            print(f"An error occurred trying to dismiss modal, continuing: {e}")
-
     def scrape(self, search_url: str) -> Iterator[Job]:
         """
         Scrapes a LinkedIn job search URL by clicking each job and extracting details from the side panel.
@@ -76,8 +60,6 @@ class LinkedInScraper(BaseScraper):
         """
         self.driver.get(search_url)
         print(f"Navigating to search URL: {search_url}")
-
-        self._dismiss_modal()
 
         try:
             self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "li.scaffold-layout__list-item")))
@@ -109,7 +91,6 @@ class LinkedInScraper(BaseScraper):
 
             except ElementClickInterceptedException:
                 print(f"Could not click job at index {index}, it was obscured. Skipping.")
-                # self._dismiss_modal() # Check again for modals
                 continue
             except Exception as e:
                 print(f"An error occurred while processing job index {index}: {e}")
@@ -145,6 +126,8 @@ class LinkedInScraper(BaseScraper):
             current_url = self.driver.current_url
             
             print(f"Successfully scraped: {title} at {company}")
+            print(f"Description snippet: {description[:150]}...")
+            
             return Job(
                 title=title,
                 company=company,
