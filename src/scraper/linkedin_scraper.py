@@ -13,6 +13,7 @@ from selenium.common.exceptions import (
     TimeoutException,
     NoSuchElementException,
     ElementClickInterceptedException,
+    InvalidSessionIdException,
 )
 
 from .base import BaseScraper
@@ -92,6 +93,9 @@ class LinkedInScraper(BaseScraper):
             except ElementClickInterceptedException:
                 print(f"Could not click job at index {index}, it was obscured. Skipping.")
                 continue
+            except InvalidSessionIdException:
+                print("Browser session became invalid. Ending scraping for this URL.")
+                break # Exit the loop for this search URL
             except Exception as e:
                 print(f"An error occurred while processing job index {index}: {e}")
                 continue
