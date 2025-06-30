@@ -38,6 +38,10 @@ class LinkedInScraper(BaseScraper):
             with open(self.cookies_path, "r") as f:
                 cookies = json.load(f)
             for cookie in cookies:
+                # Sanitize the 'sameSite' attribute if it's invalid.
+                # Some browser extensions export this with values Selenium doesn't recognize.
+                if 'sameSite' in cookie and cookie['sameSite'] not in ["Strict", "Lax", "None"]:
+                    del cookie['sameSite']
                 self.driver.add_cookie(cookie)
             print("Successfully loaded session cookies.")
         except FileNotFoundError:
