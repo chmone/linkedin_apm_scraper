@@ -5,33 +5,29 @@
 from openai import OpenAI
 from scraper.models import Job
 
-def review_content(job: Job, resume_suggestions: str, cover_letter: str, config) -> tuple:
+def review_content(job: Job, resume_suggestions: str, cover_letter: str, config) -> tuple[bool, str]:
     """
-    Reviews the generated content for quality and accuracy using a generative AI model.
-    
-    Args:
-        job: The Job object.
-        resume_suggestions: The generated resume suggestions.
-        cover_letter: The generated cover letter.
-        config: The application configuration object.
-        
-    Returns:
-        A tuple containing a boolean decision and a reason string.
+    Reviews the generated content to ensure it's high quality and relevant.
     """
-    if not config.openrouter_api_key:
-        print("Skipping review: OPENROUTER_API_KEY not configured.")
-        # Default to True to not block the pipeline if the key is missing
-        return True, "Approved under fallback."
+    print(f"Reviewing content for: {job.title}...")
+
+    with open(config.ideal_job_profile, 'r') as f:
+        ideal_job_profile_content = f.read()
 
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
         api_key=config.openrouter_api_key,
     )
-
+    
     prompt = f"""
-    You are a professional editor and career coach. Your task is to review AI-generated content for a job application to ensure it is high quality.
+    You are a meticulous hiring manager with high standards. Your task is to review an AI-generated cover letter and resume suggestions for a candidate.
 
-    **The Job:**
+    **Candidate's Ideal Job Profile:**
+    ---
+    {ideal_job_profile_content}
+    ---
+
+    **Original Job Posting:**
     ---
     **Title:** {job.title}
     **Company:** {job.company}
@@ -62,7 +58,6 @@ def review_content(job: Job, resume_suggestions: str, cover_letter: str, config)
     """
 
     try:
-        print(f"Reviewing content for: {job.title}...")
         response = client.chat.completions.create(
             model="google/gemini-pro-1.5",
             messages=[

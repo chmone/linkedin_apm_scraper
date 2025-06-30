@@ -29,6 +29,12 @@ def generate_content(job: Job, config, previous_rejection_reason: str = None, is
 
     print(f"Generating content for: {job.title}...")
     
+    with open(config.ideal_job_profile, 'r') as f:
+        ideal_job_profile_content = f.read()
+
+    with open(config.resume, 'r') as f:
+        resume_content = f.read()
+
     # Prepare the prompts
     resume_json = json.dumps(config.resume_data, indent=2)
     writing_samples = "\n---\n".join(config.writing_style_samples.values())
@@ -42,16 +48,21 @@ def generate_content(job: Job, config, previous_rejection_reason: str = None, is
         retry_prompt += "\\n**This is your final attempt.** Please generate the highest quality content possible, as this will be sent directly to the user without further review.\\n"
 
     prompt = f"""
-    You are an expert career coach and resume writer. Your task is to generate a personalized cover letter and provide specific, actionable suggestions for tailoring a resume to a job description.
-
-    **Your Writing Style:**
-    ---
-    {writing_samples}
-    ---
+    You are an expert career coach and resume writer. Your task is to help a candidate tailor their resume and write a compelling cover letter for a specific job posting.
 
     **Candidate's Resume:**
     ---
-    {resume_json}
+    {resume_content}
+    ---
+
+    **Candidate's Ideal Job Profile:**
+    ---
+    {ideal_job_profile_content}
+    ---
+    
+    **Candidate's Writing Style (emulate this):**
+    ---
+    {writing_samples}
     ---
 
     **The Job:**
