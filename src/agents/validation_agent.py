@@ -5,14 +5,11 @@ from openai import OpenAI
 from scraper.models import Job
 import sys
 
-def validate_job(job: Job, config) -> bool:
+def validate_job(job: Job, config, ideal_job_profile_content: str) -> bool:
     """
     Uses an LLM to validate if a job posting is a good fit based on the ideal job profile.
     """
     print(f"Validating job: {job.title}...")
-
-    with open(config.ideal_job_profile, 'r') as f:
-        ideal_job_profile_content = f.read()
 
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",

@@ -5,14 +5,11 @@
 from openai import OpenAI
 from scraper.models import Job
 
-def review_content(job: Job, resume_suggestions: str, cover_letter: str, config) -> tuple[bool, str]:
+def review_content(job: Job, resume_suggestions: str, cover_letter: str, config, ideal_job_profile_content: str) -> tuple[bool, str]:
     """
     Reviews the generated content to ensure it's high quality and relevant.
     """
     print(f"Reviewing content for: {job.title}...")
-
-    with open(config.ideal_job_profile, 'r') as f:
-        ideal_job_profile_content = f.read()
 
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",

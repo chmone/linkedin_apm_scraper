@@ -24,6 +24,10 @@ def run_workflow(job: Job, config):
     
     log_file = "sent_jobs.log"
     
+    # Read the ideal job profile once for the workflow
+    with open(config.ideal_job_profile, 'r') as f:
+        ideal_job_profile_content = f.read()
+    
     print(f"Starting workflow for job: {job.title}")
 
     # 1. Check if the job has already been sent
@@ -36,7 +40,7 @@ def run_workflow(job: Job, config):
     try:
         print(f"--- Processing: {job.title} at {job.company} ---")
 
-        is_fit = validation_agent.validate_job(job, config)
+        is_fit = validation_agent.validate_job(job, config, ideal_job_profile_content)
         if not is_fit:
             return []
 
@@ -46,7 +50,7 @@ def run_workflow(job: Job, config):
             print(f"Content generation attempt {attempt + 1}/3...")
 
             resume_suggestions, cover_letter = generation_agent.generate_content(
-                job, config, 
+                job, config, ideal_job_profile_content,
                 previous_rejection_reason=rejection_reason, 
                 is_last_chance=(attempt==2)
             )
@@ -54,7 +58,9 @@ def run_workflow(job: Job, config):
             if attempt == 2: # Last chance, accept it
                 is_good = True
             else:
-                is_good, reason = review_agent.review_content(job, resume_suggestions, cover_letter, config)
+                is_good, reason = review_agent.review_content(
+                    job, resume_suggestions, cover_letter, config, ideal_job_profile_content
+                )
                 if not is_good:
                     rejection_reason = reason # Store reason for next attempt
                 else:

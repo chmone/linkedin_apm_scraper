@@ -5,13 +5,14 @@ import json
 from openai import OpenAI
 from scraper.models import Job
 
-def generate_content(job: Job, config, previous_rejection_reason: str = None, is_last_chance: bool = False) -> tuple[str, str]:
+def generate_content(job: Job, config, ideal_job_profile_content: str, previous_rejection_reason=None, is_last_chance=False) -> tuple[str, str]:
     """
-    Generates tailored resume bullet points and a cover letter using a generative AI model.
+    Generates a tailored resume and cover letter for a given job.
     
     Args:
         job: A validated Job object.
         config: The application configuration object.
+        ideal_job_profile_content: The content of the ideal job profile.
         previous_rejection_reason: The reason for the previous rejection, if any.
         is_last_chance: Whether this is the final attempt.
         
@@ -29,9 +30,6 @@ def generate_content(job: Job, config, previous_rejection_reason: str = None, is
 
     print(f"Generating content for: {job.title}...")
     
-    with open(config.ideal_job_profile, 'r') as f:
-        ideal_job_profile_content = f.read()
-
     with open(config.resume, 'r') as f:
         resume_content = f.read()
 
