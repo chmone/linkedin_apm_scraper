@@ -3,8 +3,6 @@ import time
 import os
 from scraper.models import Job
 from agents import validation_agent, generation_agent, review_agent
-from .review_agent import ReviewAgent
-from .generation_agent import GenerationAgent
 
 SENT_JOBS_FILE = "sent_jobs.log"
 
@@ -33,7 +31,7 @@ def run_workflow(job: Job, config):
         if job.url in sent_jobs:
             print(f"Skipping already processed job: {job.title}")
             return []
-
+    
     try:
         print(f"--- Processing: {job.title} at {job.company} ---")
 
@@ -43,57 +41,40 @@ def run_workflow(job: Job, config):
 
         # Multi-attempt generation and review cycle
         rejection_reason = None
-        for attempt in range(3):
-            is_last_chance = (attempt == 2)
+        for attempt in range(3): # 3 attempts to generate and review
             print(f"Content generation attempt {attempt + 1}/3...")
 
             resume_suggestions, cover_letter = generation_agent.generate_content(
                 job, config, 
                 previous_rejection_reason=rejection_reason, 
-                is_last_chance=is_last_chance
+                is_last_chance=(attempt==2)
             )
 
-            if is_last_chance:
-                print("Final attempt, skipping review.")
+            if attempt == 2: # Last chance, accept it
                 is_good = True
             else:
                 is_good, reason = review_agent.review_content(job, resume_suggestions, cover_letter, config)
                 if not is_good:
                     rejection_reason = reason # Store reason for next attempt
-            
-            if is_good:
-                # Approved or final attempt
-                job_alert_message = f"""
-                **New Qualified Job Found!**
-
-                **Job Title:** {job.title}
-                **Company:** {job.company}
-                **Location:** {job.location}
-                **URL:** {job.search_url}
-                """
-                resume_suggestions_message = f"""
-                --- RESUME SUGGESTIONS ---
-                {resume_suggestions}
-                """
-                cover_letter_message = f"""
-                --- COVER LETTER DRAFT ---
-                {cover_letter}
-                """
-                final_message_groups = [[
-                    job_alert_message, 
-                    resume_suggestions_message, 
-                    cover_letter_message
-                ]]
-                save_sent_job(job.url)
-                return final_message_groups
-            else:
-                # Rejected, print to console and retry
-                print(f"Draft Rejected (Attempt {attempt + 1}/3): {job.title} at {job.company}")
-                print(f"Reason: {rejection_reason}")
-                print("*Will attempt to regenerate...*")
+                else:
+                    # Content is good, proceed to send
+                    break
         
-        print("Waiting 2 seconds before processing the next job...")
-        time.sleep(2)
+        if is_good:
+            # Prepare the messages for the notifier
+            job_alert_message = f"**New Job Alert: {job.title} at {job.company}**\n\n**Location:** {job.location}\n\n**URL:** {job.url}"
+            resume_suggestions_message = f"**Resume Suggestions:**\n\n{resume_suggestions}"
+            cover_letter_message = f"**Cover Letter:**\n\n{cover_letter}"
+
+            final_message_groups = [[
+                job_alert_message, 
+                resume_suggestions_message, 
+                cover_letter_message
+            ]]
+            save_sent_job(job.url)
+            return final_message_groups
+        else:
+            print(f"Failed to generate acceptable content for {job.title} after 3 attempts.")
 
     except Exception as e:
         print(f"An error occurred processing job: {job.title} at {job.company}. Error: {e}")
