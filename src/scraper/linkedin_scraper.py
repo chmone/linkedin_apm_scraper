@@ -103,7 +103,15 @@ class LinkedInScraper(BaseScraper):
                 self.driver.execute_script("arguments[0].scrollIntoView(true);", job_to_click)
                 time.sleep(1) # a small pause
                 job_to_click.click()
-                time.sleep(2)  # Wait for panel to load
+
+                # Forcefully wait and scroll the details panel into view
+                time.sleep(3)
+                try:
+                    details_scroller = self.driver.find_element(By.CSS_SELECTOR, "div.jobs-search__job-details-scroller")
+                    self.driver.execute_script("arguments[0].scrollTop = 0;", details_scroller)
+                except NoSuchElementException:
+                    print("Could not find details scroller, continuing...")
+                    continue
 
                 job_details = self._get_job_details_from_panel()
                 if job_details:
