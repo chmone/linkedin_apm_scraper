@@ -58,6 +58,19 @@ class LinkedInScraper(BaseScraper):
         print(f"Navigating to search URL: {search_url}")
         self.driver.get(search_url)
 
+        # Handle the potential sign-in modal that can block clicks
+        try:
+            close_button = self.wait.until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-label='Dismiss']"))
+            )
+            self.driver.execute_script("arguments[0].click();", close_button)
+            print("Dismissed a pop-up modal.")
+            time.sleep(2)  # Wait for modal to disappear
+        except TimeoutException:
+            print("No pop-up modal found to dismiss.")
+        except Exception as e:
+            print(f"An error occurred trying to dismiss modal: {e}")
+
         try:
             # Wait for the main job list container to be present on the page
             self.wait.until(
