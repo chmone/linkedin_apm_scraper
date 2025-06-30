@@ -36,10 +36,12 @@ class LinkedInScraper(BaseScraper):
         try:
             with open(self.cookies_path, "r") as file:
                 cookies = json.load(file)
+            # Go to the domain first before adding cookies
             self.driver.get("https://www.linkedin.com")
             for cookie in cookies:
                 self.driver.add_cookie(cookie)
-            self.driver.refresh()
+            # The refresh is no longer needed after navigating first
+            # self.driver.refresh() 
             print("Successfully loaded session cookies.")
         except FileNotFoundError:
             print(
