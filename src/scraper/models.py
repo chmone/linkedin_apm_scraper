@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 @dataclass
 class Job:
@@ -7,7 +7,13 @@ class Job:
     """
     title: str
     company: str
-    url: str
+    location: str
     description: str
-    location: str = ""
-    is_remote: bool = False 
+    url: str
+    search_url: str
+
+    def __post_init__(self):
+        if self.location == "":
+            self.location = "Remote"
+        if self.is_remote:
+            self.location = "Remote" 

@@ -102,7 +102,7 @@ class LinkedInScraper(Scraper):
 
                     for job_url in job_urls:
                         try:
-                            job = self._scrape_job_details(job_url)
+                            job = self._scrape_job_details(job_url, url)
                             if job:
                                 all_jobs.append(job)
                         except Exception as e:
@@ -133,7 +133,7 @@ class LinkedInScraper(Scraper):
         print(f"Scraping complete. Found {len(all_jobs)} total jobs.")
         return all_jobs
 
-    def _scrape_job_details(self, job_url: str) -> Job | None:
+    def _scrape_job_details(self, job_url: str, search_url: str) -> Job | None:
         """Scrapes the details from a single job posting page."""
         self.driver.get(job_url)
         time.sleep(3) # Wait for page to load
@@ -147,7 +147,8 @@ class LinkedInScraper(Scraper):
                 title=title,
                 company=company,
                 url=job_url,
-                description=description
+                description=description,
+                search_url=search_url
             )
             print(f"Successfully scraped: {title} at {company}")
             return job

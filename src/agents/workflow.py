@@ -75,7 +75,7 @@ def run_workflow(jobs: list[Job], config) -> list[list[str]]:
                     **Job Title:** {job.title}
                     **Company:** {job.company}
                     **Location:** {job.location}
-                    **URL:** {job.url}
+                    **URL:** {job.search_url}
                     """
                     resume_suggestions_message = f"""
                     --- RESUME SUGGESTIONS ---

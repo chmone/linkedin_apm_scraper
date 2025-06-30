@@ -3,7 +3,7 @@ name: Run LinkedIn Job Scraper
 on:
   workflow_dispatch: # Allows manual triggering
   schedule:
-    - cron: '0 8 * * *' # Runs at 8:00 AM UTC every day
+    - cron: '0 */3 * * *' # Runs every 3 hours
 
 jobs:
   run-scraper:
