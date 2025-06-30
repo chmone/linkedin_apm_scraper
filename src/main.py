@@ -24,12 +24,12 @@ def main():
     chrome_options = Options()
     chrome_options.add_argument("--log-level=3") # Suppress logs except fatal ones.
     chrome_options.add_experimental_option('excludeSwitches', ['enable-logging']) # Suppress DevTools messages
-    chrome_options.add_argument("--headless") # Always run in headless mode for production
-    
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--disable-gpu") # Often necessary for headless on Windows
+
     # These options are generally good for stability in Docker/CI environments
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
 
     driver = webdriver.Chrome(options=chrome_options)
