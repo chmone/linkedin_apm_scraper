@@ -11,7 +11,7 @@ def validate_job(job: Job, config) -> bool:
     print(f"Validating job: {job.title}...")
 
     with open(config.ideal_job_profile, 'r') as f:
-        ideal_job_profile = f.read()
+        ideal_job_profile_content = f.read()
 
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
@@ -23,7 +23,7 @@ def validate_job(job: Job, config) -> bool:
 
     **Ideal Job Profile:**
     ---
-    {ideal_job_profile}
+    {ideal_job_profile_content}
     ---
 
     **Job Posting Details:**
