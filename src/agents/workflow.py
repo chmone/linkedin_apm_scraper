@@ -1,6 +1,7 @@
 # This file will orchestrate the sequence of AI agents.
 import time
 import os
+import sys
 from scraper.models import Job
 from agents import validation_agent, generation_agent, review_agent
 
@@ -77,7 +78,7 @@ def run_workflow(job: Job, config):
             print(f"Failed to generate acceptable content for {job.title} after 3 attempts.")
 
     except Exception as e:
-        print(f"An error occurred processing job: {job.title} at {job.company}. Error: {e}")
+        print(f"An error occurred processing job: {job.title} at {job.company}. Error: {e}", file=sys.stderr)
         return []
 
     print("Workflow completed.")

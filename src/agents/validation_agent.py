@@ -3,6 +3,7 @@
 # and determine if the job is a good fit.
 from openai import OpenAI
 from scraper.models import Job
+import sys
 
 def validate_job(job: Job, config) -> bool:
     """
@@ -47,17 +48,21 @@ def validate_job(job: Job, config) -> bool:
             model="google/gemini-pro",
             messages=[
                 {"role": "user", "content": prompt}
-            ]
+            ],
+            max_tokens=10,
+            temperature=0.0,
         )
-        answer = response.choices[0].message.content.strip().upper()
-        print(f"Model validation result: {answer}")
-        
-        return "YES" in answer
-        
+        decision = response.choices[0].message.content.strip().upper()
+        print(f"Model validation result: {decision}")
+        if "YES" in decision:
+            return True
+        else:
+            print(f"Job Rejected: '{job.title}' was not a good fit.")
+            return False
+
     except Exception as e:
-        print(f"An error occurred during AI validation: {e}")
-        # Re-raise the exception to be caught by the main workflow
-        raise e
+        print(f"An error occurred during validation: {e}", file=sys.stderr)
+        return False
 
     # This part should not be reached if an exception occurs
     return False
