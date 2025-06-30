@@ -6,18 +6,12 @@ from scraper.models import Job
 
 def validate_job(job: Job, config) -> bool:
     """
-    Validates if a job is a good fit by using a generative AI model.
-    
-    Args:
-        job: A Job object.
-        config: The application configuration object.
-        
-    Returns:
-        True if the job is a good fit, False otherwise.
+    Uses an LLM to validate if a job posting is a good fit based on the ideal job profile.
     """
-    if not config.openrouter_api_key:
-        print("Skipping validation: OPENROUTER_API_KEY not configured.")
-        return False
+    print(f"Validating job: {job.title}...")
+
+    with open(config.ideal_job_profile, 'r') as f:
+        ideal_job_profile = f.read()
 
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
@@ -25,23 +19,32 @@ def validate_job(job: Job, config) -> bool:
     )
 
     prompt = f"""
-    Based on the following ideal job profile and the provided job description, please determine if this job is a good fit.
-    Answer with only 'YES' or 'NO'.
+    You are a strict job validation agent. Your task is to determine if a job posting is a good fit for a candidate based on their ideal job profile.
 
-    --- IDEAL JOB PROFILE ---
-    {config.ideal_job_profile}
+    **Ideal Job Profile:**
+    ---
+    {ideal_job_profile}
+    ---
 
-    --- JOB DESCRIPTION ---
+    **Job Posting Details:**
+    ---
     **Title:** {job.title}
     **Company:** {job.company}
     **Description:**
     {job.description}
+    ---
+    
+    **CRITICAL INSTRUCTIONS:**
+    1.  **Adhere Strictly to Exclusions:** You MUST reject any job that contains senior-level titles like "Senior," "Lead," "Group," "Director," or "Head" in the job title. The candidate is NOT looking for senior roles.
+    2.  **Verify Experience Level:** Scrutinize the description for the required years of experience. If the job requires more than 5 years of product management experience, you MUST reject it.
+    3.  **No Exceptions:** Do not make exceptions, even if some keywords match. The role's seniority and experience requirements are the most important criteria. A "Lead" role is NOT a fit, regardless of other details.
+
+    Based on these strict rules, is this job a good fit? Answer with only "YES" or "NO".
     """
 
     try:
-        print(f"Validating job: {job.title}...")
         response = client.chat.completions.create(
-            model="google/gemini-pro-1.5",
+            model="google/gemini-pro",
             messages=[
                 {"role": "user", "content": prompt}
             ]
