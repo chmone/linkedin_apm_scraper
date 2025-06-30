@@ -61,6 +61,7 @@ class LinkedInScraper(BaseScraper):
         """
         print(f"Navigating to search URL: {search_url}")
         self.driver.get(search_url)
+        time.sleep(3) # Allow page to settle before interacting
 
         # Handle the potential sign-in modal that can block clicks
         try:
@@ -167,38 +168,45 @@ class LinkedInScraper(BaseScraper):
                 continue
 
 if __name__ == '__main__':
-    # This is for testing the class structure
-    # NOTE: This will not run successfully without valid cookies and a running Selenium WebDriver.
+    # This block allows for direct testing of the scraper.
+    # It requires a valid cookies.json and a running Selenium WebDriver.
     import sys
     import os
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
     from config.config import Config
+    from selenium.webdriver.chrome.options import Options as ChromeOptions
+
+    print("--- Running LinkedIn Scraper in Standalone Test Mode ---")
     
-    # Create dummy files for config to load
-    os.makedirs("writing_style_samples", exist_ok=True)
-    with open(".env", "w") as f: f.write("")
-    with open("search_urls.txt", "w") as f: f.write("https://www.linkedin.com/jobs/search/?keywords=product%20manager")
-    # A valid cookies.json would be a list of dicts, not just one object
-    with open("cookies.json", "w") as f: f.write('[]') 
-    with open("resume.json", "w") as f: f.write("{}")
-    with open("ideal_job_profile.txt", "w") as f: f.write("")
-    
-    print("--- Running Scraper Test ---")
-    print("NOTE: This test requires a valid cookies.json file and a working internet connection.")
-    print("It will likely fail with an empty cookies file, but it tests the class structure.")
-    
+    driver = None
     try:
-        test_config = Config.get_instance()
-        scraper = LinkedInScraper(driver=webdriver.Chrome(options=webdriver.ChromeOptions()))
-        jobs = list(scraper.scrape(test_config.search_urls[0]))
-        print(f"Scraper finished. Scraped {len(jobs)} jobs.")
+        # Load real configuration
+        config = Config.get_instance()
+        
+        # Setup a visible browser for debugging
+        chrome_options = ChromeOptions()
+        # The next line is commented out to run in visible mode. Uncomment for headless.
+        # chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--window-size=1920,1080")
+        driver = webdriver.Chrome(options=chrome_options)
+
+        scraper = LinkedInScraper(driver=driver, cookies_path=config.cookies_file)
+
+        if not config.search_urls:
+            print("No search URLs found in your configuration.")
+        else:
+            # Test with the first search URL
+            first_url = config.search_urls[0]
+            print(f"Testing scrape with URL: {first_url}")
+            jobs_found = list(scraper.scrape(first_url))
+            print(f"\n--- Test Complete ---")
+            print(f"Scraper finished. Scraped {len(jobs_found)} jobs.")
+            for job in jobs_found:
+                print(f"- {job.title} at {job.company}")
+
     except Exception as e:
-        print(f"Test run failed as expected (likely due to invalid cookies): {e}")
+        print(f"\n--- An error occurred during the test run ---")
+        logging.error("Scraper test failed", exc_info=True)
     finally:
-        # Clean up
-        os.remove(".env")
-        os.remove("search_urls.txt")
-        os.remove("cookies.json")
-        os.remove("resume.json")
-        os.remove("ideal_job_profile.txt")
-        os.rmdir("writing_style_samples") 
+        if driver:
+            print("Closing WebDriver.")
+            driver.quit() 
