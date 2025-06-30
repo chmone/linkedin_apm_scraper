@@ -103,7 +103,7 @@ class LinkedInScraper(BaseScraper):
                 job_to_click.click()
                 time.sleep(2)  # Wait for panel to load
 
-                job_details = self._get_job_details_from_panel()
+                job_details = self._get_job_details_from_panel(search_url)
                 if job_details:
                     yield job_details
 
@@ -115,7 +115,7 @@ class LinkedInScraper(BaseScraper):
                 print(f"An error occurred while processing job index {index}: {e}")
                 continue
 
-    def _get_job_details_from_panel(self) -> Job | None:
+    def _get_job_details_from_panel(self, search_url: str) -> Job | None:
         """
         Extracts all job details from the right-hand side panel.
         """
@@ -151,6 +151,7 @@ class LinkedInScraper(BaseScraper):
                 location=location,
                 description=description,
                 url=current_url,
+                search_url=search_url,
             )
         except TimeoutException:
             print("Timed out waiting for job details panel to load.")
