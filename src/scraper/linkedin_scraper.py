@@ -3,6 +3,7 @@ import json
 import re
 from typing import Iterator
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
+import logging
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -90,6 +91,17 @@ class LinkedInScraper(BaseScraper):
                 details_panel = self.wait.until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, ".jobs-search__job-details--container"))
                 )
+
+                # Click the "See more" button to expand the description if it exists
+                try:
+                    see_more_button = details_panel.find_element(By.CSS_SELECTOR, "button.jobs-description__footer-button")
+                    if see_more_button.is_displayed():
+                        self.driver.execute_script("arguments[0].click();", see_more_button)
+                        time.sleep(1) # Wait for description to expand
+                except NoSuchElementException:
+                    pass # Button not found, description is likely not truncated.
+                except Exception as e:
+                    logging.warning(f"Could not click 'See more' button, proceeding with potentially truncated description. Error: {e}")
 
                 # Scrape information from the details panel
                 title = details_panel.find_element(By.CSS_SELECTOR, "h2.jobs-details-top-card__job-title").text
