@@ -1,13 +1,19 @@
 import time
 import json
-import logging
+import re
 from typing import Iterator
+from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
+import logging
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.common.exceptions import (
+    TimeoutException,
+    NoSuchElementException,
+    ElementClickInterceptedException,
+)
 
 from .base import BaseScraper
 from .models import Job
@@ -26,30 +32,32 @@ class LinkedInScraper(BaseScraper):
         self._load_cookies()
 
     def _load_cookies(self):
-        """Loads session cookies into the browser to maintain the user's session."""
+        """Loads session cookies into the browser to maintain login state."""
         try:
+            with open(self.cookies_path, "r") as file:
+                cookies = json.load(file)
             self.driver.get("https://www.linkedin.com")
-            with open(self.cookies_path, "r") as f:
-                cookies = json.load(f)
             for cookie in cookies:
-                if 'sameSite' in cookie and cookie['sameSite'] not in ["Strict", "Lax", "None"]:
-                    del cookie['sameSite']
                 self.driver.add_cookie(cookie)
+            self.driver.refresh()
             print("Successfully loaded session cookies.")
         except FileNotFoundError:
-            print(f"Cookie file not found at '{self.cookies_path}'. Proceeding without authentication.")
+            print(
+                f"Cookie file not found at {self.cookies_path}. The scraper will operate without being logged in."
+            )
         except Exception as e:
-            logging.error(f"An error occurred while loading cookies: {e}", exc_info=True)
+            print(f"An error occurred loading cookies: {e}")
 
     def _dismiss_modal(self):
-        """Checks for and dismisses a sign-in modal that can overlay the page."""
+        """Dismisses the messaging pop-up modal if it appears."""
         try:
-            close_button = WebDriverWait(self.driver, 3).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-label='Dismiss']"))
+            modal_button = self.wait.until(
+                EC.element_to_be_clickable(
+                    (By.CSS_SELECTOR, "button.msg-overlay-bubble-header__control--new-convo-btn")
+                )
             )
-            self.driver.execute_script("arguments[0].click();", close_button)
-            print("Dismissed a pop-up modal.")
-            time.sleep(1)
+            modal_button.click()
+            print("Dismissed the pop-up modal.")
         except TimeoutException:
             print("No pop-up modal found to dismiss.")
         except Exception as e:
@@ -80,54 +88,83 @@ class LinkedInScraper(BaseScraper):
 
         job_elements = self.driver.find_elements(By.CSS_SELECTOR, "li.scaffold-layout__list-item")
         print(f"Found {len(job_elements)} job items to process.")
-
+        
         for index in range(len(job_elements)):
             try:
-                # Re-fetch elements to prevent staleness
-                job_elements = self.driver.find_elements(By.CSS_SELECTOR, "li.scaffold-layout__list-item")
-                if index >= len(job_elements):
+                # Re-fetch the list on each iteration to prevent stale element exceptions
+                job_list = self.driver.find_elements(By.CSS_SELECTOR, "li.scaffold-layout__list-item")
+                if index >= len(job_list):
+                    print("Index out of bounds, breaking loop.")
                     break
                 
-                job_element = job_elements[index]
-                self.driver.execute_script("arguments[0].scrollIntoView(true);", job_element)
-                time.sleep(1)
-                job_element.click()
-                time.sleep(2) # Wait for details to load
+                job_to_click = job_list[index]
+                self.driver.execute_script("arguments[0].scrollIntoView(true);", job_to_click)
+                time.sleep(1) # a small pause
+                job_to_click.click()
+                time.sleep(2)  # Wait for panel to load
 
-                details_container = self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.jobs-search__job-details--container")))
-                
-                # Expand description
-                try:
-                    see_more_button = details_container.find_element(By.CSS_SELECTOR, "button.jobs-description__footer-button")
-                    if see_more_button.is_displayed():
-                        self.driver.execute_script("arguments[0].click();", see_more_button)
-                        time.sleep(1)
-                except (NoSuchElementException, TimeoutException):
-                    pass # No button, or it's not visible
+                job_details = self._get_job_details_from_panel()
+                if job_details:
+                    yield job_details
 
-                title = details_container.find_element(By.CSS_SELECTOR, ".jobs-details-top-card__job-title").text
-                company = details_container.find_element(By.CSS_SELECTOR, ".jobs-details-top-card__company-info a").text
-                location = details_container.find_element(By.CSS_SELECTOR, ".jobs-details-top-card__company-info > span").text
-                description = self.driver.find_element(By.ID, "job-details").text
-                
-                # Get the direct URL from the list item link and clean it
-                direct_url = job_element.find_element(By.CSS_SELECTOR, "a").get_attribute("href").split('?')[0]
-                
-                search_url_with_id = self.driver.current_url
-
-                print(f"Successfully scraped job: '{title}' at '{company}'")
-                yield Job(
-                    title=title,
-                    company=company,
-                    location=location,
-                    description=description,
-                    url=direct_url,
-                    search_url=search_url_with_id,
-                )
-
-            except Exception as e:
-                print(f"An unexpected error occurred while processing job {index + 1}: {e}")
+            except ElementClickInterceptedException:
+                print(f"Could not click job at index {index}, it was obscured. Skipping.")
+                # self._dismiss_modal() # Check again for modals
                 continue
+            except Exception as e:
+                print(f"An error occurred while processing job index {index}: {e}")
+                continue
+
+    def _get_job_details_from_panel(self) -> Job | None:
+        """
+        Extracts all job details from the right-hand side panel.
+        """
+        try:
+            # Wait for the main panel container to ensure it's loaded
+            self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.jobs-search__job-details-scroller")))
+            
+            title = self.driver.find_element(By.CSS_SELECTOR, "h1.jobs-unified-top-card__job-title").text.strip()
+            
+            primary_desc_container = self.driver.find_element(By.CSS_SELECTOR, "div.jobs-unified-top-card__primary-description")
+            
+            try:
+                company = primary_desc_container.find_element(By.css_selector, "a").text.strip()
+            except NoSuchElementException:
+                company = "N/A" # Company might not be a link
+
+            spans = primary_desc_container.find_elements(By.CSS_SELECTOR, "span")
+            location = spans[1].text.strip() if len(spans) > 1 else "N/A"
+
+            # Expand the job description
+            try:
+                see_more_button = self.driver.find_element(By.CSS_SELECTOR, "button.jobs-description__footer-button")
+                self.driver.execute_script("arguments[0].click();", see_more_button)
+                time.sleep(1)
+            except NoSuchElementException:
+                pass # No "see more" button
+
+            description_container = self.driver.find_element(By.CSS_SELECTOR, "div#job-details")
+            description = description_container.get_attribute('innerHTML').strip()
+            
+            current_url = self.driver.current_url
+
+            print(f"Successfully scraped: {title} at {company}")
+            return Job(
+                title=title,
+                company=company,
+                location=location,
+                description=description,
+                url=current_url,
+            )
+        except TimeoutException:
+            print("Timed out waiting for job details panel to load.")
+            return None
+        except NoSuchElementException as e:
+            print(f"Could not find an element in the details panel: {e}")
+            return None
+        except Exception as e:
+            print(f"An unexpected error occurred while scraping details panel: {e}")
+            return None
 
 
 if __name__ == '__main__':

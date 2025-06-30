@@ -3,33 +3,36 @@
 import logging
 import time
 
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options as ChromeOptions
-
-from config.config import Config
+from config.config import load_config
 from scraper.linkedin_scraper import LinkedInScraper
 from agents.workflow import run_workflow
 from notifier.telegram_notifier import TelegramNotifier
 
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+
+
 def main():
     """
-    Main function to run the job scraping and processing workflow.
+    The main function to run the LinkedIn job scraper and AI workflow.
     """
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    
+    config = load_config()
+    
+    chrome_options = Options()
+    if config.headless:
+        chrome_options.add_argument("--headless")
+    
+    # These options are generally good for stability in Docker/CI environments
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080")
 
-    driver = None  # Initialize driver to None
+    driver = webdriver.Chrome(options=chrome_options)
+    
     try:
-        # Get configuration
-        config = Config.get_instance()
-
-        # Initialize WebDriver
-        chrome_options = ChromeOptions()
-        # chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--window-size=1920,1080")
-        driver = webdriver.Chrome(options=chrome_options)
-
         # 1. Scrape Jobs
         logging.info("Starting job scraping...")
         scraper = LinkedInScraper(driver=driver, cookies_path=config.cookies_file)
@@ -44,7 +47,7 @@ def main():
                 logging.error(f"Failed to scrape from {url}: {e}", exc_info=True)
 
         if not all_jobs:
-            logging.info("No jobs were scraped.")
+            logging.info("No new jobs were scraped.")
         else:
             logging.info(f"Scraped a total of {len(all_jobs)} jobs. Starting AI workflow...")
             for job in all_jobs:
@@ -54,9 +57,8 @@ def main():
     except Exception as e:
         logging.error(f"An error occurred in the main workflow: {e}", exc_info=True)
     finally:
-        if driver:
-            logging.info("Closing the WebDriver.")
-            driver.quit()
+        logging.info("Closing the WebDriver.")
+        driver.quit()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main() 
