@@ -34,11 +34,11 @@ class LinkedInScraper(BaseScraper):
         """Loads session cookies into the browser to maintain the user's session."""
         try:
             # We must be on the linkedin.com domain to set cookies for it.
-        self.driver.get("https://www.linkedin.com")
+            self.driver.get("https://www.linkedin.com")
             with open(self.cookies_path, "r") as f:
-            cookies = json.load(f)
-        for cookie in cookies:
-            self.driver.add_cookie(cookie)
+                cookies = json.load(f)
+            for cookie in cookies:
+                self.driver.add_cookie(cookie)
             print("Successfully loaded session cookies.")
         except FileNotFoundError:
             print(f"Cookie file not found at '{self.cookies_path}'. Proceeding without authentication.")
@@ -117,7 +117,7 @@ class LinkedInScraper(BaseScraper):
                 job_id_match = re.search(r'view/(\d+)/', href)
                 if not job_id_match:
                     print(f"Could not extract job ID from URL: {href}")
-                continue
+                    continue
                 job_id = job_id_match.group(1)
 
                 parsed_search_url = urlparse(search_url)
@@ -142,7 +142,7 @@ class LinkedInScraper(BaseScraper):
                 print(f"Skipping a job due to a scraping error (element not found or timeout): {e}")
                 # It's safer to just continue to the next item
                 continue
-        except Exception as e:
+            except Exception as e:
                 print(f"An unexpected error occurred while processing a job: {e}")
                 continue
 
