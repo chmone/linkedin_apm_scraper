@@ -39,6 +39,7 @@ class Config:
         """Loads all configuration data from files."""
         # Load environment variables from .env file
         load_dotenv()
+        self.headless = os.getenv("HEADLESS", "true").lower() == "true"
         self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
         self.telegram_api_key = os.getenv("TELEGRAM_API_KEY")
 
