@@ -56,7 +56,9 @@ def main():
                 message_groups = run_workflow(job, config)
                 if message_groups:
                     for group in message_groups:
-                        notifier.send_messages(group)
+                        for message in group:
+                            notifier.send_message(message)
+                            time.sleep(1) # Small delay between parts of the message
                         # Add a delay between notifications to avoid rate limiting
                         time.sleep(5)
 
