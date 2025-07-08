@@ -26,8 +26,9 @@ class LinkedInScraper(BaseScraper):
     It clicks on each job to reveal the details in a side panel and scrapes the information from there.
     """
 
-    def __init__(self, driver: webdriver.Chrome, cookies_path: str = "cookies.json", linkedin_password: str = None, notifier=None):
-        super().__init__(driver)
+    def __init__(self, driver: webdriver.Chrome, platform_config=None, cookies_path: str = "cookies.json", 
+                 linkedin_password: str = None, notifier=None, **kwargs):
+        super().__init__(driver, platform_config, **kwargs)
         self.cookies_path = cookies_path
         self.linkedin_password = linkedin_password
         self.notifier = notifier
@@ -129,6 +130,25 @@ class LinkedInScraper(BaseScraper):
             print("Re-applied stealth JavaScript for current page.")
         except Exception as e:
             print(f"Warning: Could not re-apply stealth JavaScript: {e}")
+    
+    def authenticate(self) -> bool:
+        """
+        Perform LinkedIn-specific authentication using cookies and password.
+        Returns True if authentication was successful, False otherwise.
+        """
+        return self._attempt_login()
+    
+    def validate_url(self, url: str) -> bool:
+        """
+        Validate if the provided URL is a LinkedIn jobs URL.
+        
+        Args:
+            url: URL to validate
+            
+        Returns:
+            True if URL is a valid LinkedIn jobs URL, False otherwise
+        """
+        return "linkedin.com" in url and ("/jobs/" in url or "/search/results/people/" in url)
     
     def _attempt_login(self) -> bool:
         """
@@ -544,6 +564,7 @@ class LinkedInScraper(BaseScraper):
                 description=description_html,
                 url=current_url,
                 search_url=search_url,
+                platform="linkedin"
             )
         except TimeoutException:
             print("Timed out waiting for job details panel to load.")

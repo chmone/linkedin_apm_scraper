@@ -1,0 +1,66 @@
+{
+  "linkedin": {
+    "enabled": true,
+    "search_urls": [
+      "https://www.linkedin.com/jobs/search/?keywords=product%20manager&location=United%20States",
+      "https://www.linkedin.com/jobs/search/?keywords=senior%20product%20manager&location=Remote"
+    ],
+    "auth": {
+      "cookies_path": "cookies.json",
+      "password": null,
+      "use_cookies": true,
+      "use_password": false
+    },
+    "scraper_settings": {
+      "headless": true,
+      "wait_timeout": 10,
+      "scroll_pause": 0.5,
+      "click_pause": 2
+    },
+    "rate_limits": {
+      "request_delay": 1,
+      "page_delay": 5
+    }
+  },
+  "indeed": {
+    "enabled": false,
+    "search_urls": [
+      "https://www.indeed.com/jobs?q=product+manager&l=United+States"
+    ],
+    "auth": {
+      "use_cookies": false,
+      "use_password": false
+    },
+    "scraper_settings": {
+      "headless": true,
+      "wait_timeout": 15,
+      "scroll_pause": 1.0,
+      "click_pause": 3
+    },
+    "rate_limits": {
+      "request_delay": 2,
+      "page_delay": 10
+    }
+  },
+  "glassdoor": {
+    "enabled": false,
+    "search_urls": [
+      "https://www.glassdoor.com/Job/jobs.htm?suggestCount=0&suggestChosen=false&clickSource=searchBtn&typedKeyword=product+manager&sc.keyword=product+manager&locT=&locId=&jobType="
+    ],
+    "auth": {
+      "cookies_path": "glassdoor_cookies.json",
+      "use_cookies": true,
+      "use_password": false
+    },
+    "scraper_settings": {
+      "headless": true,
+      "wait_timeout": 12,
+      "scroll_pause": 0.8,
+      "click_pause": 2.5
+    },
+    "rate_limits": {
+      "request_delay": 3,
+      "page_delay": 15
+    }
+  }
+} 

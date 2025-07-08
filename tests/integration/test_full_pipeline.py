@@ -41,34 +41,47 @@ def test_full_pipeline_with_mocks(test_config):
     - Mocks the TelegramNotifier to prevent sending actual messages.
     """
     # 1. Define mock data and return values
-    mock_job_1 = Job(title="Associate Product Manager", company="Company A", url="http://example.com/1", description="Desc 1", location="Remote")
-    mock_job_2 = Job(title="Product Manager", company="Company B", url="http://example.com/2", description="Desc 2", location="New York, NY")
+    mock_job_1 = Job(title="Associate Product Manager", company="Company A", url="http://example.com/1", description="Desc 1", location="Remote", platform="linkedin")
+    mock_job_2 = Job(title="Product Manager", company="Company B", url="http://example.com/2", description="Desc 2", location="New York, NY", platform="linkedin")
     mock_jobs = [mock_job_1, mock_job_2]
 
     # 2. Set up patches for all external services
-    with patch('src.main.LinkedInScraper') as MockScraper, \
-         patch('src.agents.workflow.validation_agent.genai.GenerativeModel') as MockValidatorModel, \
-         patch('src.agents.workflow.generation_agent.genai.GenerativeModel') as MockGeneratorModel, \
-         patch('src.agents.workflow.review_agent.genai.GenerativeModel') as MockReviewerModel, \
+    with patch('src.scraper.factory.ScraperFactory.create_scraper') as MockScraperFactory, \
+         patch('src.scraper.factory.ScraperFactory.validate_url_for_platform') as MockUrlValidator, \
+         patch('src.agents.validation_agent.OpenAI') as MockValidatorClient, \
+         patch('src.agents.generation_agent.OpenAI') as MockGeneratorClient, \
+         patch('src.agents.review_agent.OpenAI') as MockReviewerClient, \
          patch('src.main.TelegramNotifier') as MockNotifier:
 
         # Configure the return values for each mock
-        MockScraper.return_value.scrape.return_value = mock_jobs
+        mock_scraper_instance = MagicMock()
+        mock_scraper_instance.scrape.return_value = mock_jobs
+        mock_scraper_instance.validate_url.return_value = True  # Always validate URLs
+        MockScraperFactory.return_value = mock_scraper_instance
+        MockUrlValidator.return_value = True  # Always validate URLs in factory too
         
-        # Mock validation to approve the first job and reject the second
-        validator_instance = MockValidatorModel.return_value
-        validator_instance.generate_content.side_effect = [
-            MagicMock(text="YES"), 
-            MagicMock(text="NO")
+        # Mock validation client to approve the first job and reject the second
+        mock_validator_client = MockValidatorClient.return_value
+        mock_validator_response1 = MagicMock()
+        mock_validator_response1.choices[0].message.content = "YES"
+        mock_validator_response2 = MagicMock()
+        mock_validator_response2.choices[0].message.content = "NO"
+        mock_validator_client.chat.completions.create.side_effect = [
+            mock_validator_response1,
+            mock_validator_response2
         ]
 
-        # Mock generation to return content for the approved job
-        generator_instance = MockGeneratorModel.return_value
-        generator_instance.generate_content.return_value = MagicMock(text="Resume points---SPLIT---Cover letter")
+        # Mock generation client to return content for the approved job
+        mock_generator_client = MockGeneratorClient.return_value
+        mock_generator_response = MagicMock()
+        mock_generator_response.choices[0].message.content = "Resume points---SPLIT---Cover letter"
+        mock_generator_client.chat.completions.create.return_value = mock_generator_response
 
-        # Mock review to approve the generated content
-        reviewer_instance = MockReviewerModel.return_value
-        reviewer_instance.generate_content.return_value = MagicMock(text="YES")
+        # Mock review client to approve the generated content
+        mock_reviewer_client = MockReviewerClient.return_value
+        mock_reviewer_response = MagicMock()
+        mock_reviewer_response.choices[0].message.content = "YES"
+        mock_reviewer_client.chat.completions.create.return_value = mock_reviewer_response
 
         # Get a reference to the notifier instance for assertion
         notifier_instance = MockNotifier.return_value
@@ -77,14 +90,14 @@ def test_full_pipeline_with_mocks(test_config):
         main()
 
         # 4. Assert that the external services were called correctly
-        MockScraper.return_value.scrape.assert_called_once()
+        mock_scraper_instance.scrape.assert_called()
         
         # Validator should be called for both jobs
-        assert validator_instance.generate_content.call_count == 2
+        assert mock_validator_client.chat.completions.create.call_count == 2
 
         # Generator and Reviewer should only be called once for the approved job
-        generator_instance.generate_content.assert_called_once()
-        reviewer_instance.generate_content.assert_called_once()
+        mock_generator_client.chat.completions.create.assert_called_once()
+        mock_reviewer_client.chat.completions.create.assert_called_once()
 
         # Notifier should only be called once with the final message for the approved job
         notifier_instance.send_message.assert_called_once()
