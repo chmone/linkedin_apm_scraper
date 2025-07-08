@@ -23,7 +23,7 @@
   - **Soft Skills:** Excellent communication, leadership, cross-functional collaboration, problem-solving, business acumen.
 
 ## Exclusions (What to avoid)
-- **Senior Roles:** Avoid titles like "Senior PM," "Lead PM," "Group PM," "Director of Product," or "Head of Product."
+- **Senior Roles:** Avoid titles like "Senior PM," "Lead PM," "Group PM," "Lead Product Manager," "Director of Product," or "Head of Product."
 - **High Experience Requirements:** Skip roles requiring more than 5-6 years of experience.
 - **Niche Industries:** Avoid roles in highly specialized, non-tech industries unless they have a strong software component (e.g., manufacturing, oil & gas).
 - **Heavy Specialization:** Avoid roles that require deep, mandatory expertise in a niche field like Machine Learning, AI, or specific hardware unless it aligns with the resume.

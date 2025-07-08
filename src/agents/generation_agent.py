@@ -5,14 +5,13 @@ import json
 from openai import OpenAI
 from scraper.models import Job
 
-def generate_content(job: Job, config, ideal_job_profile_content: str, previous_rejection_reason=None, is_last_chance=False) -> tuple[str, str]:
+def generate_content(job: Job, config, previous_rejection_reason: str = None, is_last_chance: bool = False) -> tuple[str, str]:
     """
-    Generates a tailored resume and cover letter for a given job.
+    Generates tailored resume bullet points and a cover letter using a generative AI model.
     
     Args:
         job: A validated Job object.
         config: The application configuration object.
-        ideal_job_profile_content: The content of the ideal job profile.
         previous_rejection_reason: The reason for the previous rejection, if any.
         is_last_chance: Whether this is the final attempt.
         
@@ -30,9 +29,6 @@ def generate_content(job: Job, config, ideal_job_profile_content: str, previous_
 
     print(f"Generating content for: {job.title}...")
     
-    with open(config.resume, 'r') as f:
-        resume_content = f.read()
-
     # Prepare the prompts
     resume_json = json.dumps(config.resume_data, indent=2)
     writing_samples = "\n---\n".join(config.writing_style_samples.values())
@@ -46,21 +42,16 @@ def generate_content(job: Job, config, ideal_job_profile_content: str, previous_
         retry_prompt += "\\n**This is your final attempt.** Please generate the highest quality content possible, as this will be sent directly to the user without further review.\\n"
 
     prompt = f"""
-    You are an expert career coach and resume writer. Your task is to help a candidate tailor their resume and write a compelling cover letter for a specific job posting.
+    You are an expert career coach and resume writer. Your task is to generate a personalized cover letter and provide specific, actionable suggestions for tailoring a resume to a job description.
+
+    **Your Writing Style:**
+    ---
+    {writing_samples}
+    ---
 
     **Candidate's Resume:**
     ---
-    {resume_content}
-    ---
-
-    **Candidate's Ideal Job Profile:**
-    ---
-    {ideal_job_profile_content}
-    ---
-    
-    **Candidate's Writing Style (emulate this):**
-    ---
-    {writing_samples}
+    {resume_json}
     ---
 
     **The Job:**
