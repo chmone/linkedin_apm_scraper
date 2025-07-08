@@ -418,76 +418,177 @@ class LinkedInScraper(BaseScraper):
                 print("Debug screenshot saved: signin_modal_after_auth.png")
                 return
 
-        # Check for multiple possible job card selectors
-        job_selectors = [
-            "div.job-search-card",  # Original selector
-            "div[data-entity-urn*='job']",  # Alternative selector
-            ".jobs-search-results__list-item",  # Another common pattern
-            ".job-card-container",  # Backup selector
-            "[data-job-id]"  # Generic job ID selector
+        # Focus on the job search results list container to find only visible jobs
+        print("Looking for job search results container...")
+        
+        # Wait for the main job results container
+        try:
+            self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".jobs-search-results-list")))
+            print("✅ Job search results container found")
+        except TimeoutException:
+            print("❌ Could not find job search results container. Taking screenshot for debugging...")
+            self.driver.save_screenshot("no_job_container_found.png")
+            print("Debug screenshot saved: no_job_container_found.png")
+            return
+
+        # Target selectors specifically within the visible job search results area
+        job_container_selectors = [
+            ".jobs-search-results-list .job-card-container",  # Jobs within the search results list
+            ".jobs-search-results-list .job-search-card", 
+            ".jobs-search-results-list li",  # Generic list items in job results
+            ".scaffold-layout__list-container .job-card-container",  # Alternative structure
         ]
         
-        job_elements = []
-        for selector in job_selectors:
+        visible_job_elements = []
+        working_selector = None
+        
+        for selector in job_container_selectors:
             try:
-                print(f"Trying selector: {selector}")
-                self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
+                print(f"Trying targeted selector: {selector}")
                 job_elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                if job_elements:
-                    print(f"✅ Found {len(job_elements)} job elements using selector: {selector}")
+                
+                # Filter for only visible elements (not hidden or off-screen)
+                visible_elements = []
+                for element in job_elements:
+                    try:
+                        if element.is_displayed() and element.size['height'] > 0 and element.size['width'] > 0:
+                            # Additional check: is the element in the viewport?
+                            location = element.location
+                            size = element.size
+                            if location['y'] >= 0 and (location['y'] + size['height']) <= self.driver.get_window_size()['height']:
+                                visible_elements.append(element)
+                    except Exception:
+                        continue  # Skip elements that can't be checked
+                
+                if visible_elements:
+                    visible_job_elements = visible_elements
+                    working_selector = selector
+                    print(f"✅ Found {len(visible_elements)} visible job elements using selector: {selector}")
                     break
-            except TimeoutException:
-                print(f"❌ Timeout with selector: {selector}")
+                else:
+                    print(f"❌ No visible jobs found with selector: {selector}")
+                    
+            except Exception as e:
+                print(f"❌ Error with selector {selector}: {e}")
                 continue
         
-        if not job_elements:
-            print("❌ Could not find job list with any selector. Taking screenshot for debugging...")
-            self.driver.save_screenshot("no_jobs_found.png")
-            print("Debug screenshot saved: no_jobs_found.png")
+        if not visible_job_elements:
+            print("❌ Could not find any visible job elements. Taking screenshot for debugging...")
+            self.driver.save_screenshot("no_visible_jobs_found.png") 
+            print("Debug screenshot saved: no_visible_jobs_found.png")
             return
-        print(f"Found {len(job_elements)} job items in the list.")
+            
+        print(f"Found {len(visible_job_elements)} visible job items to process.")
+        print(f"Using working selector: {working_selector}")
         
-        # Store the working selector for re-fetching
-        working_selector = None
-        for selector in job_selectors:
-            test_elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-            if len(test_elements) == len(job_elements):
-                working_selector = selector
+        # Implement dynamic scrolling approach to discover all available jobs
+        processed_job_urls = set()  # Track processed jobs to avoid duplicates
+        jobs_found_count = 0
+        scroll_attempts = 0
+        max_scroll_attempts = 10  # Prevent infinite scrolling
+        
+        print("Starting dynamic job discovery with left sidebar scrolling...")
+        
+        while scroll_attempts < max_scroll_attempts:
+            # Get currently visible jobs
+            current_visible_jobs = self._get_current_visible_jobs(working_selector)
+            
+            if not current_visible_jobs:
+                print("No visible jobs found in current view.")
+                break
+            
+            print(f"Found {len(current_visible_jobs)} visible jobs in current view (scroll attempt {scroll_attempts + 1})")
+            
+            # Process each visible job
+            new_jobs_found = False
+            for job_index, job_element in enumerate(current_visible_jobs):
+                try:
+                    # Scroll the job into view and click it
+                    self.driver.execute_script("arguments[0].scrollIntoView(true);", job_element)
+                    time.sleep(0.5)  # Brief pause for scrolling
+                    job_element.click()
+                    time.sleep(2)  # Wait for panel to load
+
+                    job_details = self._get_job_details_from_panel(search_url)
+                    if job_details and job_details.url not in processed_job_urls:
+                        processed_job_urls.add(job_details.url)
+                        jobs_found_count += 1
+                        new_jobs_found = True
+                        yield job_details
+
+                except ElementClickInterceptedException:
+                    print(f"Could not click job at position {job_index}, it was obscured. Skipping.")
+                    continue
+                except InvalidSessionIdException:
+                    print("Browser session became invalid. Ending scraping for this URL.")
+                    return
+                except Exception as e:
+                    print(f"An error occurred while processing job at position {job_index}: {e}")
+                    continue
+            
+            # Try scrolling down in the left sidebar to load more jobs
+            if new_jobs_found:
+                print(f"Processed {jobs_found_count} unique jobs so far. Scrolling to find more...")
+                self._scroll_job_list_down()
+                time.sleep(2)  # Wait for new jobs to load
+                scroll_attempts += 1
+            else:
+                print("No new jobs found in current view. Ending search.")
                 break
         
-        if not working_selector:
-            working_selector = ".job-card-container"  # Fallback to what usually works
+        print(f"Job discovery complete. Found {jobs_found_count} unique jobs total.")
+    
+    def _get_current_visible_jobs(self, working_selector: str) -> list:
+        """Get currently visible job elements in the viewport."""
+        try:
+            job_elements = self.driver.find_elements(By.CSS_SELECTOR, working_selector)
+            visible_jobs = []
             
-        print(f"Using selector for re-fetching: {working_selector}")
-        
-        for index in range(len(job_elements)):
-            try:
-                # Re-fetch the list on each iteration using the working selector
-                job_list = self.driver.find_elements(By.CSS_SELECTOR, working_selector)
-                if index >= len(job_list):
-                    print("Index out of bounds, breaking loop.")
-                    break
-                
-                
-                job_to_click = job_list[index]
-                self.driver.execute_script("arguments[0].scrollIntoView(true);", job_to_click)
-                time.sleep(1) # a small pause
-                job_to_click.click()
-                time.sleep(2)  # Wait for panel to load
-
-                job_details = self._get_job_details_from_panel(search_url)
-                if job_details:
-                    yield job_details
-
-            except ElementClickInterceptedException:
-                print(f"Could not click job at index {index}, it was obscured. Skipping.")
-                continue
-            except InvalidSessionIdException:
-                print("Browser session became invalid. Ending scraping for this URL.")
-                break # Exit the loop for this search URL
-            except Exception as e:
-                print(f"An error occurred while processing job index {index}: {e}")
-                continue
+            for element in job_elements:
+                try:
+                    if element.is_displayed() and element.size['height'] > 0 and element.size['width'] > 0:
+                        location = element.location
+                        size = element.size
+                        window_height = self.driver.get_window_size()['height']
+                        
+                        # Check if element is in viewport (at least partially visible)
+                        if (location['y'] + size['height'] > 0 and 
+                            location['y'] < window_height):
+                            visible_jobs.append(element)
+                except Exception:
+                    continue
+            
+            return visible_jobs
+        except Exception as e:
+            print(f"Error getting visible jobs: {e}")
+            return []
+    
+    def _scroll_job_list_down(self):
+        """Scroll down in the job list container to load more jobs."""
+        try:
+            # Find the job list container and scroll it
+            job_list_containers = [
+                ".jobs-search-results-list",
+                ".scaffold-layout__list-container", 
+                ".job-search-results-list"
+            ]
+            
+            for container_selector in job_list_containers:
+                try:
+                    container = self.driver.find_element(By.CSS_SELECTOR, container_selector)
+                    # Scroll down within the container
+                    self.driver.execute_script("arguments[0].scrollTop += 300;", container)
+                    print(f"Scrolled down in container: {container_selector}")
+                    return
+                except NoSuchElementException:
+                    continue
+            
+            # Fallback: scroll the entire page
+            self.driver.execute_script("window.scrollBy(0, 300);")
+            print("Scrolled page down as fallback")
+            
+        except Exception as e:
+            print(f"Error scrolling job list: {e}")
 
     def _get_job_details_from_panel(self, search_url: str) -> Job | None:
         """
@@ -519,8 +620,7 @@ class LinkedInScraper(BaseScraper):
             
             current_url = self.driver.current_url
             
-            print(f"Successfully scraped: {title} at {company}")
-            print(f"Description snippet: {description_text[:150]}...")
+            print(f"✅ Scraped: {title} at {company}")
             
             return Job(
                 title=title,
