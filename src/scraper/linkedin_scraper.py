@@ -26,11 +26,338 @@ class LinkedInScraper(BaseScraper):
     It clicks on each job to reveal the details in a side panel and scrapes the information from there.
     """
 
-    def __init__(self, driver: webdriver.Chrome, cookies_path: str = "cookies.json"):
+    def __init__(self, driver: webdriver.Chrome, cookies_path: str = "cookies.json", linkedin_password: str = None):
         super().__init__(driver)
         self.cookies_path = cookies_path
+        self.linkedin_password = linkedin_password
         self.wait = WebDriverWait(self.driver, 10)
-        self._load_cookies()
+        # Don't load cookies at initialization - do it when we actually need authentication
+    
+    def _mask_automation_properties(self):
+        """Execute JavaScript to hide automation properties that sites might detect."""
+        try:
+            # Override navigator.webdriver property
+            self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            
+            # Override other automation detection properties
+            self.driver.execute_script("""
+                // Remove webdriver property
+                delete navigator.__proto__.webdriver;
+                
+                // Override plugins and languages to appear more realistic
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [1, 2, 3, 4, 5]
+                });
+                
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['en-US', 'en']
+                });
+                
+                // Override chrome property to appear like regular Chrome
+                Object.defineProperty(navigator, 'chrome', {
+                    get: () => ({
+                        app: {
+                            isInstalled: false,
+                        },
+                        webstore: {
+                            onInstallStageChanged: {},
+                            onDownloadProgress: {},
+                        },
+                        runtime: {
+                            onConnect: {},
+                            onMessage: {},
+                        },
+                    })
+                });
+                
+                // Override permissions property
+                Object.defineProperty(navigator, 'permissions', {
+                    get: () => ({
+                        query: () => Promise.resolve({ state: 'granted' })
+                    })
+                });
+            """)
+            print("Successfully masked automation properties on current page.")
+        except Exception as e:
+            print(f"Warning: Could not mask automation properties: {e}")
+    
+    def _reapply_stealth_javascript(self):
+        """Re-apply JavaScript masking on the current page to maintain stealth."""
+        try:
+            # Override navigator.webdriver property
+            self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            
+            # Override other automation detection properties
+            self.driver.execute_script("""
+                // Remove webdriver property
+                delete navigator.__proto__.webdriver;
+                
+                // Override plugins and languages to appear more realistic
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [1, 2, 3, 4, 5]
+                });
+                
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['en-US', 'en']
+                });
+                
+                // Override chrome property to appear like regular Chrome
+                Object.defineProperty(navigator, 'chrome', {
+                    get: () => ({
+                        app: {
+                            isInstalled: false,
+                        },
+                        webstore: {
+                            onInstallStageChanged: {},
+                            onDownloadProgress: {},
+                        },
+                        runtime: {
+                            onConnect: {},
+                            onMessage: {},
+                        },
+                    })
+                });
+                
+                // Override permissions property
+                Object.defineProperty(navigator, 'permissions', {
+                    get: () => ({
+                        query: () => Promise.resolve({ state: 'granted' })
+                    })
+                });
+            """)
+            print("Re-applied stealth JavaScript for current page.")
+        except Exception as e:
+            print(f"Warning: Could not re-apply stealth JavaScript: {e}")
+    
+    def _attempt_login(self) -> bool:
+        """
+        Attempt to authenticate by loading cookies when we detect we need login.
+        Returns True if authentication appears successful, False otherwise.
+        """
+        try:
+            print("Loading cookies for authentication...")
+            
+            # Navigate to the signin page first - this is where authentication context is most appropriate
+            print("Navigating to LinkedIn signin page to inject cookies...")
+            self.driver.get("https://www.linkedin.com/login")
+            time.sleep(2)  # Allow page to fully load
+            
+            # Apply stealth JavaScript on login page
+            self._reapply_stealth_javascript()
+            
+            with open(self.cookies_path, "r") as f:
+                cookies = json.load(f)
+            
+            print(f"Loading {len(cookies)} cookies...")
+            for cookie in cookies:
+                # Sanitize the 'sameSite' attribute if it's invalid.
+                # Some browser extensions export this with values Selenium doesn't recognize.
+                if 'sameSite' in cookie and cookie['sameSite'] not in ["Strict", "Lax", "None"]:
+                    del cookie['sameSite']
+                self.driver.add_cookie(cookie)
+            
+            print("Successfully loaded session cookies.")
+            
+            # After loading cookies, wait for page to refresh and show the "Welcome back" screen
+            print("Waiting for page to refresh to show Welcome back screen...")
+            time.sleep(2)  # Give time for cookies to process
+            
+            # Refresh the page to ensure cookies take effect
+            self.driver.refresh()
+            time.sleep(1)  # Wait for refresh to complete
+            
+            # Wait for the Welcome back screen to appear
+            welcome_back_detected = self._wait_for_welcome_back_screen(timeout=10)
+            
+            if welcome_back_detected:
+                print("Detected 'Welcome back' screen. Completing login with password...")
+                
+                if not self.linkedin_password:
+                    print("Error: LinkedIn password not provided in environment variables.")
+                    return False
+                
+                # Complete the login by filling password and clicking sign in
+                login_success = self._complete_password_login()
+                if not login_success:
+                    print("Failed to complete password login.")
+                    return False
+                
+                print("Password login completed successfully! Authentication complete.")
+                return True
+            else:
+                print("No 'Welcome back' screen detected. May already be fully logged in.")
+                return True
+                
+        except FileNotFoundError:
+            print(f"Cookie file not found at '{self.cookies_path}'. Cannot authenticate.")
+            return False
+        except Exception as e:
+            print(f"An error occurred during authentication: {e}")
+            return False
+    
+    def _check_for_welcome_back_screen(self) -> bool:
+        """
+        Check if we're on the 'Welcome back' screen that requires password completion.
+        Returns True ONLY if we're on the specific welcome back screen with the user's name.
+        """
+        try:
+            print("Checking for Welcome back screen...")
+            
+            # First, look for the specific "Welcome back" heading text
+            welcome_text_selectors = [
+                "//h1[contains(text(), 'Welcome back')]",
+                "//*[contains(text(), 'Welcome back')]"
+            ]
+            
+            welcome_text_found = False
+            for selector in welcome_text_selectors:
+                try:
+                    elements = self.driver.find_elements(By.XPATH, selector)
+                    if elements and any(elem.is_displayed() for elem in elements):
+                        print(f"Welcome back text found using selector: {selector}")
+                        welcome_text_found = True
+                        break
+                except Exception:
+                    continue
+            
+            # Only if we found "Welcome back" text, then check for password field
+            if welcome_text_found:
+                password_selectors = [
+                    "input[name='session_password']",
+                    "input[type='password']",
+                    "#password"
+                ]
+                
+                for selector in password_selectors:
+                    try:
+                        elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                        if elements and any(elem.is_displayed() for elem in elements):
+                            print(f"Welcome back screen confirmed - password field found: {selector}")
+                            return True
+                    except Exception:
+                        continue
+                
+                print("Welcome back text found but no password field - may already be logged in")
+                return False
+            else:
+                print("No 'Welcome back' text found - not on welcome back screen")
+                return False
+                
+        except Exception as e:
+            print(f"Error checking for welcome back screen: {e}")
+            return False
+    
+    def _wait_for_welcome_back_screen(self, timeout: int = 15) -> bool:
+        """
+        Wait for the Welcome back screen to appear after loading cookies.
+        Returns True if welcome back screen appears, False if timeout.
+        """
+        print(f"Waiting up to {timeout} seconds for Welcome back screen to appear...")
+        
+        for attempt in range(timeout):
+            if self._check_for_welcome_back_screen():
+                return True
+            time.sleep(1)
+        
+        print("Timeout waiting for Welcome back screen.")
+        return False
+    
+    def _complete_password_login(self) -> bool:
+        """
+        Complete the login process by filling in the password and clicking sign in.
+        Returns True if login appears successful, False otherwise.
+        """
+        try:
+            # Find and fill the password field
+            password_selectors = [
+                "input[name='session_password']",
+                "input[type='password']",
+                "#password",
+                "input[id*='password']"
+            ]
+            
+            password_field = None
+            for selector in password_selectors:
+                try:
+                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                    for element in elements:
+                        if element.is_displayed():
+                            password_field = element
+                            break
+                    if password_field:
+                        break
+                except Exception:
+                    continue
+            
+            if not password_field:
+                print("Could not find password field.")
+                return False
+            
+            print("Found password field. Filling in password...")
+            password_field.clear()
+            password_field.send_keys(self.linkedin_password)
+            time.sleep(1)
+            
+            # Find and click the sign in button
+            signin_selectors = [
+                "button[data-litms-control-urn='login-submit']",
+                "button[type='submit']",
+                "button:contains('Sign in')",
+                ".login__form_action_container button",
+                "input[type='submit']"
+            ]
+            
+            signin_button = None
+            for selector in signin_selectors:
+                try:
+                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                    for element in elements:
+                        if element.is_displayed():
+                            signin_button = element
+                            break
+                    if signin_button:
+                        break
+                except Exception:
+                    continue
+            
+            if not signin_button:
+                print("Could not find sign in button.")
+                return False
+            
+            print("Found sign in button. Clicking to complete login...")
+            signin_button.click()
+            time.sleep(3)  # Wait for LinkedIn to process login
+            
+            # Check if login was successful by looking at the current URL and page content
+            current_url = self.driver.current_url
+            print(f"Current URL after login attempt: {current_url}")
+            
+            # Check for login success indicators
+            if "linkedin.com/feed" in current_url or "linkedin.com/in/" in current_url:
+                print("✅ Login successful - redirected to feed or profile!")
+                return True
+            elif "linkedin.com/login" in current_url or "linkedin.com/uas/login" in current_url:
+                print("❌ Login failed - still on login page")
+                return False
+            elif "challenge" in current_url or "checkpoint" in current_url:
+                print("⚠️  Login requires additional verification (CAPTCHA/email)")
+                return False
+            else:
+                # Check page content for success/failure indicators
+                page_text = self.driver.page_source.lower()
+                if "welcome back" in page_text and "password" in page_text:
+                    print("❌ Still on welcome back screen - login may have failed")
+                    return False
+                elif "feed" in page_text or "home" in page_text:
+                    print("✅ Login appears successful based on page content")
+                    return True
+                else:
+                    print(f"⚠️  Uncertain login status. Current URL: {current_url}")
+                    return False
+            
+        except Exception as e:
+            print(f"Error completing password login: {e}")
+            return False
 
     def _load_cookies(self):
         """Loads session cookies into the browser to maintain the user's session."""
@@ -63,28 +390,80 @@ class LinkedInScraper(BaseScraper):
         """
         print(f"Navigating to search URL: {search_url}")
         self.driver.get(search_url)
+        
+        # Apply JavaScript masking for this page
+        self._mask_automation_properties()
 
-        # Check for sign-in modal before proceeding
+        # Check for sign-in modal - if detected, attempt login
         if self._check_for_signin_modal():
-            print("Sign-in modal detected. Cannot proceed with job scraping. Login session may have expired.")
-            self.driver.save_screenshot("/app/signin_modal_detected.png")
-            print("Debug screenshot saved: signin_modal_detected.png")
-            return
+            print("Sign-in modal detected. Attempting to authenticate...")
+            
+            # Attempt to load cookies and authenticate
+            success = self._attempt_login()
+            if not success:
+                print("Authentication failed. Cannot proceed with job scraping.")
+                self.driver.save_screenshot("signin_modal_detected.png")
+                print("Debug screenshot saved: signin_modal_detected.png")
+                return
+            
+            # Navigate back to search URL after successful authentication
+            print("Authentication successful. Returning to search page...")
+            self.driver.get(search_url)
+            self._reapply_stealth_javascript()
+            
+            # Check one more time if we're properly authenticated
+            if self._check_for_signin_modal():
+                print("Still seeing sign-in modal after authentication. Login may have failed.")
+                self.driver.save_screenshot("signin_modal_after_auth.png")
+                print("Debug screenshot saved: signin_modal_after_auth.png")
+                return
 
-        try:
-            self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.job-search-card")))
-            print("Job list container found.")
-        except TimeoutException:
-            print("Timeout waiting for job list to load. Cannot continue scraping this URL.")
+        # Check for multiple possible job card selectors
+        job_selectors = [
+            "div.job-search-card",  # Original selector
+            "div[data-entity-urn*='job']",  # Alternative selector
+            ".jobs-search-results__list-item",  # Another common pattern
+            ".job-card-container",  # Backup selector
+            "[data-job-id]"  # Generic job ID selector
+        ]
+        
+        job_elements = []
+        for selector in job_selectors:
+            try:
+                print(f"Trying selector: {selector}")
+                self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
+                job_elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                if job_elements:
+                    print(f"✅ Found {len(job_elements)} job elements using selector: {selector}")
+                    break
+            except TimeoutException:
+                print(f"❌ Timeout with selector: {selector}")
+                continue
+        
+        if not job_elements:
+            print("❌ Could not find job list with any selector. Taking screenshot for debugging...")
+            self.driver.save_screenshot("no_jobs_found.png")
+            print("Debug screenshot saved: no_jobs_found.png")
             return
-
-        job_elements = self.driver.find_elements(By.CSS_SELECTOR, "div.job-search-card")
         print(f"Found {len(job_elements)} job items in the list.")
+        
+        # Store the working selector for re-fetching
+        working_selector = None
+        for selector in job_selectors:
+            test_elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+            if len(test_elements) == len(job_elements):
+                working_selector = selector
+                break
+        
+        if not working_selector:
+            working_selector = ".job-card-container"  # Fallback to what usually works
+            
+        print(f"Using selector for re-fetching: {working_selector}")
         
         for index in range(len(job_elements)):
             try:
-                # Re-fetch the list on each iteration to prevent stale element exceptions
-                job_list = self.driver.find_elements(By.CSS_SELECTOR, "div.job-search-card")
+                # Re-fetch the list on each iteration using the working selector
+                job_list = self.driver.find_elements(By.CSS_SELECTOR, working_selector)
                 if index >= len(job_list):
                     print("Index out of bounds, breaking loop.")
                     break

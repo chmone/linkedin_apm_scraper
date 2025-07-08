@@ -42,6 +42,7 @@ class Config:
         self.headless = os.getenv("HEADLESS", "false").lower() == "true"
         self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
         self.telegram_api_key = os.getenv("TELEGRAM_API_KEY")
+        self.linkedin_password = os.getenv("LINKEDIN_PASSWORD")
 
         self.search_urls = self._load_file("search_urls.txt").splitlines()
         self.cookies_file = "cookies.json"  # Store the path, not the content
