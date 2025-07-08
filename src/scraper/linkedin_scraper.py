@@ -33,85 +33,23 @@ class LinkedInScraper(BaseScraper):
         self._load_cookies()
 
     def _load_cookies(self):
-        """Loads session cookies into the browser to maintain login state."""
+        """Loads session cookies into the browser to maintain the user's session."""
         try:
-            with open(self.cookies_path, "r") as file:
-                cookies = json.load(file)
+            # We must be on the linkedin.com domain to set cookies for it.
             self.driver.get("https://www.linkedin.com")
+            with open(self.cookies_path, "r") as f:
+                cookies = json.load(f)
             for cookie in cookies:
-                # Clean up cookie format for Selenium compatibility
-                clean_cookie = {
-                    'name': cookie['name'],
-                    'value': cookie['value'],
-                    'domain': cookie['domain'],
-                    'path': cookie['path'],
-                    'secure': cookie['secure']
-                }
-                # Add optional fields only if they exist and are not null
-                if cookie.get('httpOnly') is not None:
-                    clean_cookie['httpOnly'] = cookie['httpOnly']
-                if cookie.get('sameSite') and cookie['sameSite'] != 'no_restriction':
-                    clean_cookie['sameSite'] = cookie['sameSite']
-                if cookie.get('expirationDate'):
-                    clean_cookie['expiry'] = int(cookie['expirationDate'])
-                
-                try:
-                    self.driver.add_cookie(clean_cookie)
-                except Exception as cookie_error:
-                    print(f"Failed to add cookie {cookie['name']}: {cookie_error}")
-                    continue
-            self.driver.refresh()
-            
-            # Wait for page to load and verify login state
-            time.sleep(3)
-            
-            # Check if we're logged in by looking for profile elements
-            try:
-                # Take a screenshot first to debug login state
-                self.driver.save_screenshot("/app/login_verification.png")
-                print("Debug screenshot saved: login_verification.png")
-                
-                # Try multiple selectors to detect login state
-                login_indicators = [
-                    "[data-test-id='profile-button']",
-                    ".global-nav__me",
-                    ".feed-identity-module", 
-                    "[data-control-name='identity_welcome_message']",
-                    ".global-nav__primary-link--me",
-                    "button[aria-label*='View profile']",
-                    ".me-photo",
-                    ".nav-item__profile-member-photo",
-                    "img[alt*='Photo of']"
-                ]
-                
-                logged_in = False
-                for selector in login_indicators:
-                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                    if elements:
-                        print(f"Login verified using selector: {selector}")
-                        logged_in = True
-                        break
-                
-                if logged_in:
-                    print("Successfully loaded session cookies - Login verified.")
-                else:
-                    print("Warning: Cookies loaded but login verification failed. May need fresh cookies.")
-                    # Check if we can see any indication of being logged out
-                    sign_in_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), 'Sign in')]")
-                    if sign_in_elements:
-                        print("Found 'Sign in' elements - definitely not logged in")
-                        
-            except Exception as e:
-                print(f"Warning: Could not verify login state after loading cookies: {e}")
-                
+                # Sanitize the 'sameSite' attribute if it's invalid.
+                # Some browser extensions export this with values Selenium doesn't recognize.
+                if 'sameSite' in cookie and cookie['sameSite'] not in ["Strict", "Lax", "None"]:
+                    del cookie['sameSite']
+                self.driver.add_cookie(cookie)
+            print("Successfully loaded session cookies.")
         except FileNotFoundError:
-            print(
-                f"Cookie file not found at {self.cookies_path}. The scraper will operate without being logged in."
-            )
+            print(f"Cookie file not found at '{self.cookies_path}'. Proceeding without authentication.")
         except Exception as e:
-            print(f"An error occurred loading cookies: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"An error occurred while loading cookies: {e}")
 
     def scrape(self, search_url: str) -> Iterator[Job]:
         """
@@ -123,77 +61,25 @@ class LinkedInScraper(BaseScraper):
         Yields:
             A Job object for each successfully scraped job posting.
         """
-        # Ensure we start from LinkedIn main page to maintain session context
-        print("Ensuring session is established on LinkedIn main page...")
-        self.driver.get("https://www.linkedin.com")
-        time.sleep(2)
-        
-        # Verify we're still logged in on main page before proceeding
-        try:
-            # Try multiple selectors to detect login state
-            login_indicators = [
-                "[data-test-id='profile-button']",
-                ".global-nav__me",
-                ".feed-identity-module", 
-                "[data-control-name='identity_welcome_message']",
-                ".global-nav__primary-link--me",
-                "button[aria-label*='View profile']",
-                ".me-photo",
-                ".nav-item__profile-member-photo",
-                "img[alt*='Photo of']"
-            ]
-            
-            logged_in = False
-            for selector in login_indicators:
-                elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                if elements:
-                    print(f"Login verified on main page using selector: {selector}")
-                    logged_in = True
-                    break
-            
-            if not logged_in:
-                print("Warning: Not logged in on main page. Session may have expired.")
-                self.driver.save_screenshot("/app/login_failed_main_page.png")
-                print("Debug screenshot saved: login_failed_main_page.png")
-                return
-            else:
-                print("Login verified on main page. Proceeding to job search.")
-        except Exception as e:
-            print(f"Could not verify login state on main page: {e}")
-            return
-        
-        # Now navigate to the job search URL
-        self.driver.get(search_url)
         print(f"Navigating to search URL: {search_url}")
-        time.sleep(3)  # Give extra time for job search page to load
+        self.driver.get(search_url)
 
-        # Check for sign-in modal immediately after navigation
+        # Check for sign-in modal before proceeding
         if self._check_for_signin_modal():
-            print("Sign-in modal detected after navigating to job search. Session was lost during navigation.")
-            self.driver.save_screenshot("/app/signin_modal_after_navigation.png")
-            print("Debug screenshot saved: signin_modal_after_navigation.png")
+            print("Sign-in modal detected. Cannot proceed with job scraping. Login session may have expired.")
+            self.driver.save_screenshot("/app/signin_modal_detected.png")
+            print("Debug screenshot saved: signin_modal_detected.png")
             return
 
         try:
             self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.job-search-card")))
-            print("Job list items found.")
+            print("Job list container found.")
         except TimeoutException:
-            print("Timeout waiting for job list items to load.")
-            # Check if modal appeared during wait
-            if self._check_for_signin_modal():
-                print("Sign-in modal appeared while waiting for job list.")
-                self.driver.save_screenshot("/app/signin_modal_during_wait.png")
+            print("Timeout waiting for job list to load. Cannot continue scraping this URL.")
             return
 
         job_elements = self.driver.find_elements(By.CSS_SELECTOR, "div.job-search-card")
-        print(f"Found {len(job_elements)} job items to process.")
-        
-        # Take a screenshot to verify login and page state
-        try:
-            self.driver.save_screenshot("/app/job_search_ready.png")
-            print("Debug screenshot saved: job_search_ready.png")
-        except:
-            pass
+        print(f"Found {len(job_elements)} job items in the list.")
         
         for index in range(len(job_elements)):
             try:
@@ -216,12 +102,6 @@ class LinkedInScraper(BaseScraper):
 
             except ElementClickInterceptedException:
                 print(f"Could not click job at index {index}, it was obscured. Skipping.")
-                # Take a screenshot to debug clicking issues
-                try:
-                    self.driver.save_screenshot(f"/app/click_error_{index}.png")
-                    print(f"Debug screenshot saved: click_error_{index}.png")
-                except:
-                    pass
                 continue
             except InvalidSessionIdException:
                 print("Browser session became invalid. Ending scraping for this URL.")
