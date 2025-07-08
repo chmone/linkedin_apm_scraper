@@ -7,6 +7,7 @@ import logging
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import (
@@ -61,6 +62,9 @@ class LinkedInScraper(BaseScraper):
         """
         self.driver.get(search_url)
         print(f"Navigating to search URL: {search_url}")
+
+        # Dismiss any modals that might be blocking interactions
+        self._dismiss_modals()
 
         try:
             self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.job-search-card")))
@@ -150,6 +154,47 @@ class LinkedInScraper(BaseScraper):
         except Exception as e:
             print(f"An unexpected error occurred while scraping details panel: {e}")
             return None
+
+    def _dismiss_modals(self):
+        """
+        Attempts to dismiss any modal dialogs that might be blocking interactions.
+        """
+        time.sleep(2)  # Give page time to load any modals
+        
+        # Try multiple common modal dismiss selectors
+        dismiss_selectors = [
+            "button[aria-label='Dismiss']",
+            "button[data-tracking-control-name='public_jobs_contextual-sign-in-modal_modal_dismiss']",
+            ".modal__dismiss",
+            ".artdeco-modal__dismiss",
+            "button.artdeco-button--circle",
+            ".jobs-modal__dismiss-button",
+            "[data-test-modal-close-btn]"
+        ]
+        
+        for selector in dismiss_selectors:
+            try:
+                dismiss_button = self.driver.find_element(By.CSS_SELECTOR, selector)
+                if dismiss_button.is_displayed():
+                    print(f"Trying to find and click modal dismiss button with selector: {selector}")
+                    self.driver.execute_script("arguments[0].click();", dismiss_button)
+                    print("Clicked the modal dismiss button via JavaScript.")
+                    time.sleep(1)  # Wait for modal to close
+                    return
+            except NoSuchElementException:
+                continue
+            except Exception as e:
+                print(f"Error trying to dismiss modal with selector {selector}: {e}")
+                continue
+        
+        # Try sending ESCAPE key as fallback
+        try:
+            print("Trying to close modal by sending ESCAPE key...")
+            self.driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.ESCAPE)
+            print("Sent ESCAPE key and waited for modal to close.")
+            time.sleep(1)
+        except Exception as e:
+            print(f"Error sending ESCAPE key: {e}")
 
 
 if __name__ == '__main__':
