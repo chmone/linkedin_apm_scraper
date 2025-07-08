@@ -73,21 +73,45 @@ class LinkedInScraper(BaseScraper):
         Yields:
             A Job object for each successfully scraped job posting.
         """
+        # Ensure we start from LinkedIn main page to maintain session context
+        print("Ensuring session is established on LinkedIn main page...")
+        self.driver.get("https://www.linkedin.com")
+        time.sleep(2)
+        
+        # Verify we're still logged in on main page before proceeding
+        try:
+            profile_elements = self.driver.find_elements(By.CSS_SELECTOR, "[data-test-id='profile-button'], .global-nav__me, .feed-identity-module")
+            if not profile_elements:
+                print("Warning: Not logged in on main page. Session may have expired.")
+                self.driver.save_screenshot("/app/login_failed_main_page.png")
+                return
+            else:
+                print("Login verified on main page. Proceeding to job search.")
+        except Exception as e:
+            print(f"Could not verify login state on main page: {e}")
+            return
+        
+        # Now navigate to the job search URL
         self.driver.get(search_url)
         print(f"Navigating to search URL: {search_url}")
+        time.sleep(3)  # Give extra time for job search page to load
+
+        # Check for sign-in modal immediately after navigation
+        if self._check_for_signin_modal():
+            print("Sign-in modal detected after navigating to job search. Session was lost during navigation.")
+            self.driver.save_screenshot("/app/signin_modal_after_navigation.png")
+            print("Debug screenshot saved: signin_modal_after_navigation.png")
+            return
 
         try:
             self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.job-search-card")))
             print("Job list items found.")
         except TimeoutException:
             print("Timeout waiting for job list items to load.")
-            return
-
-        # Check for sign-in modal before proceeding
-        if self._check_for_signin_modal():
-            print("Sign-in modal detected. Cannot proceed with job scraping. Login session may have expired.")
-            self.driver.save_screenshot("/app/signin_modal_detected.png")
-            print("Debug screenshot saved: signin_modal_detected.png")
+            # Check if modal appeared during wait
+            if self._check_for_signin_modal():
+                print("Sign-in modal appeared while waiting for job list.")
+                self.driver.save_screenshot("/app/signin_modal_during_wait.png")
             return
 
         job_elements = self.driver.find_elements(By.CSS_SELECTOR, "div.job-search-card")
