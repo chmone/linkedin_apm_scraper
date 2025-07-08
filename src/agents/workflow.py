@@ -40,7 +40,7 @@ def run_workflow(job: Job, config):
     try:
         print(f"--- Processing: {job.title} at {job.company} ---")
 
-        is_fit = validation_agent.validate_job(job, config, ideal_job_profile_content)
+        is_fit = validation_agent.validate_job(job, config)
         if not is_fit:
             return []
 

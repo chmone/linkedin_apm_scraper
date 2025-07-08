@@ -402,8 +402,6 @@ class LinkedInScraper(BaseScraper):
             success = self._attempt_login()
             if not success:
                 print("Authentication failed. Cannot proceed with job scraping.")
-                self.driver.save_screenshot("signin_modal_detected.png")
-                print("Debug screenshot saved: signin_modal_detected.png")
                 return
             
             # Navigate back to search URL after successful authentication
@@ -414,8 +412,6 @@ class LinkedInScraper(BaseScraper):
             # Check one more time if we're properly authenticated
             if self._check_for_signin_modal():
                 print("Still seeing sign-in modal after authentication. Login may have failed.")
-                self.driver.save_screenshot("signin_modal_after_auth.png")
-                print("Debug screenshot saved: signin_modal_after_auth.png")
                 return
 
         # Use streamlined approach to get all jobs from the table directly
@@ -458,9 +454,7 @@ class LinkedInScraper(BaseScraper):
                 print(f"Fallback selector failed: {e}")
         
         if not working_selector or not all_job_elements:
-            print("❌ Could not find any job elements. Taking screenshot for debugging...")
-            self.driver.save_screenshot("no_visible_jobs_found.png") 
-            print("Debug screenshot saved: no_visible_jobs_found.png")
+            print("❌ Could not find any job elements.")
             return
             
         print(f"Using working selector: {working_selector}")
