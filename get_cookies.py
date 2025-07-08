@@ -26,11 +26,26 @@ def get_linkedin_cookies():
         print("\n📋 Instructions:")
         print("1. Complete the login process manually in the browser window")
         print("2. Navigate to a job search page (e.g., https://www.linkedin.com/jobs/)")
-        print("3. Make sure you're fully logged in and can see job listings")
+        print("3. Make sure you're fully logged in and can see job listings WITHOUT any login prompts")
         print("4. Come back to this terminal and press ENTER when ready")
         
         # Wait for user to complete login
         input("\nPress ENTER after you've logged in and are on a job page...")
+        
+        # Navigate to the actual job search page to ensure cookies work there
+        print("\n🔍 Navigating to job search page to verify login...")
+        search_url = 'https://www.linkedin.com/jobs/search/?f_PP=102571732%2C102277331&f_TPR=r5000&geoId=103644278&keywords=associate%20product%20manager'
+        driver.get(search_url)
+        time.sleep(3)
+        
+        # Check if we can see job listings without login prompts
+        current_title = driver.title
+        print(f"📄 Job search page title: {current_title}")
+        
+        if "sign" in current_title.lower() or "login" in current_title.lower():
+            print("⚠️  Warning: Still seeing login prompts on job search page")
+        else:
+            print("✅ Job search page accessible without login prompts")
         
         print("\n💾 Extracting cookies...")
         cookies = driver.get_cookies()

@@ -41,7 +41,21 @@ class LinkedInScraper(BaseScraper):
             for cookie in cookies:
                 self.driver.add_cookie(cookie)
             self.driver.refresh()
-            print("Successfully loaded session cookies.")
+            
+            # Wait for page to load and verify login state
+            time.sleep(3)
+            
+            # Check if we're logged in by looking for profile elements
+            try:
+                # Look for elements that indicate we're logged in
+                profile_elements = self.driver.find_elements(By.CSS_SELECTOR, "[data-test-id='profile-button'], .global-nav__me, .feed-identity-module")
+                if profile_elements:
+                    print("Successfully loaded session cookies - Login verified.")
+                else:
+                    print("Warning: Cookies loaded but login verification failed. May need fresh cookies.")
+            except:
+                print("Warning: Could not verify login state after loading cookies.")
+                
         except FileNotFoundError:
             print(
                 f"Cookie file not found at {self.cookies_path}. The scraper will operate without being logged in."
