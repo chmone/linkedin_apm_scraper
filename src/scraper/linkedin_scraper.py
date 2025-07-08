@@ -39,7 +39,27 @@ class LinkedInScraper(BaseScraper):
                 cookies = json.load(file)
             self.driver.get("https://www.linkedin.com")
             for cookie in cookies:
-                self.driver.add_cookie(cookie)
+                # Clean up cookie format for Selenium compatibility
+                clean_cookie = {
+                    'name': cookie['name'],
+                    'value': cookie['value'],
+                    'domain': cookie['domain'],
+                    'path': cookie['path'],
+                    'secure': cookie['secure']
+                }
+                # Add optional fields only if they exist and are not null
+                if cookie.get('httpOnly') is not None:
+                    clean_cookie['httpOnly'] = cookie['httpOnly']
+                if cookie.get('sameSite') and cookie['sameSite'] != 'no_restriction':
+                    clean_cookie['sameSite'] = cookie['sameSite']
+                if cookie.get('expirationDate'):
+                    clean_cookie['expiry'] = int(cookie['expirationDate'])
+                
+                try:
+                    self.driver.add_cookie(clean_cookie)
+                except Exception as cookie_error:
+                    print(f"Failed to add cookie {cookie['name']}: {cookie_error}")
+                    continue
             self.driver.refresh()
             
             # Wait for page to load and verify login state
@@ -47,14 +67,42 @@ class LinkedInScraper(BaseScraper):
             
             # Check if we're logged in by looking for profile elements
             try:
-                # Look for elements that indicate we're logged in
-                profile_elements = self.driver.find_elements(By.CSS_SELECTOR, "[data-test-id='profile-button'], .global-nav__me, .feed-identity-module")
-                if profile_elements:
+                # Take a screenshot first to debug login state
+                self.driver.save_screenshot("/app/login_verification.png")
+                print("Debug screenshot saved: login_verification.png")
+                
+                # Try multiple selectors to detect login state
+                login_indicators = [
+                    "[data-test-id='profile-button']",
+                    ".global-nav__me",
+                    ".feed-identity-module", 
+                    "[data-control-name='identity_welcome_message']",
+                    ".global-nav__primary-link--me",
+                    "button[aria-label*='View profile']",
+                    ".me-photo",
+                    ".nav-item__profile-member-photo",
+                    "img[alt*='Photo of']"
+                ]
+                
+                logged_in = False
+                for selector in login_indicators:
+                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                    if elements:
+                        print(f"Login verified using selector: {selector}")
+                        logged_in = True
+                        break
+                
+                if logged_in:
                     print("Successfully loaded session cookies - Login verified.")
                 else:
                     print("Warning: Cookies loaded but login verification failed. May need fresh cookies.")
-            except:
-                print("Warning: Could not verify login state after loading cookies.")
+                    # Check if we can see any indication of being logged out
+                    sign_in_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), 'Sign in')]")
+                    if sign_in_elements:
+                        print("Found 'Sign in' elements - definitely not logged in")
+                        
+            except Exception as e:
+                print(f"Warning: Could not verify login state after loading cookies: {e}")
                 
         except FileNotFoundError:
             print(
@@ -62,6 +110,8 @@ class LinkedInScraper(BaseScraper):
             )
         except Exception as e:
             print(f"An error occurred loading cookies: {e}")
+            import traceback
+            traceback.print_exc()
 
     def scrape(self, search_url: str) -> Iterator[Job]:
         """
@@ -80,10 +130,31 @@ class LinkedInScraper(BaseScraper):
         
         # Verify we're still logged in on main page before proceeding
         try:
-            profile_elements = self.driver.find_elements(By.CSS_SELECTOR, "[data-test-id='profile-button'], .global-nav__me, .feed-identity-module")
-            if not profile_elements:
+            # Try multiple selectors to detect login state
+            login_indicators = [
+                "[data-test-id='profile-button']",
+                ".global-nav__me",
+                ".feed-identity-module", 
+                "[data-control-name='identity_welcome_message']",
+                ".global-nav__primary-link--me",
+                "button[aria-label*='View profile']",
+                ".me-photo",
+                ".nav-item__profile-member-photo",
+                "img[alt*='Photo of']"
+            ]
+            
+            logged_in = False
+            for selector in login_indicators:
+                elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                if elements:
+                    print(f"Login verified on main page using selector: {selector}")
+                    logged_in = True
+                    break
+            
+            if not logged_in:
                 print("Warning: Not logged in on main page. Session may have expired.")
                 self.driver.save_screenshot("/app/login_failed_main_page.png")
+                print("Debug screenshot saved: login_failed_main_page.png")
                 return
             else:
                 print("Login verified on main page. Proceeding to job search.")
