@@ -26,10 +26,11 @@ class LinkedInScraper(BaseScraper):
     It clicks on each job to reveal the details in a side panel and scrapes the information from there.
     """
 
-    def __init__(self, driver: webdriver.Chrome, cookies_path: str = "cookies.json", linkedin_password: str = None):
+    def __init__(self, driver: webdriver.Chrome, cookies_path: str = "cookies.json", linkedin_password: str = None, notifier=None):
         super().__init__(driver)
         self.cookies_path = cookies_path
         self.linkedin_password = linkedin_password
+        self.notifier = notifier
         self.wait = WebDriverWait(self.driver, 10)
         # Don't load cookies at initialization - do it when we actually need authentication
     
@@ -402,6 +403,7 @@ class LinkedInScraper(BaseScraper):
             success = self._attempt_login()
             if not success:
                 print("Authentication failed. Cannot proceed with job scraping.")
+                self._send_auth_failure_notification("Initial authentication failed")
                 return
             
             # Navigate back to search URL after successful authentication
@@ -412,6 +414,7 @@ class LinkedInScraper(BaseScraper):
             # Check one more time if we're properly authenticated
             if self._check_for_signin_modal():
                 print("Still seeing sign-in modal after authentication. Login may have failed.")
+                self._send_auth_failure_notification("Sign-in modal still present after authentication")
                 return
 
         # Use streamlined approach to get all jobs from the table directly
@@ -588,6 +591,27 @@ class LinkedInScraper(BaseScraper):
                 continue
         
         return False
+    
+    def _send_auth_failure_notification(self, failure_reason: str):
+        """Send a Telegram notification when authentication fails."""
+        if self.notifier:
+            try:
+                message = f"🚨 **LinkedIn Authentication Failed** 🚨\n\n"
+                message += f"**Reason:** {failure_reason}\n\n"
+                message += f"**Action Required:** Please update the cookies.json file\n\n"
+                message += f"**Steps:**\n"
+                message += f"1. Log into LinkedIn manually in your browser\n"
+                message += f"2. Export fresh cookies using the browser extension\n"
+                message += f"3. Replace the cookies.json file in the repository\n\n"
+                message += f"**Time:** {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}"
+                
+                print("Sending authentication failure notification via Telegram...")
+                self.notifier.send_message(message)
+                print("✅ Telegram notification sent successfully")
+            except Exception as e:
+                print(f"❌ Failed to send Telegram notification: {e}")
+        else:
+            print("⚠️ No notifier configured - cannot send authentication failure alert")
 
 
 if __name__ == '__main__':

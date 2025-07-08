@@ -24,7 +24,7 @@ def main():
     chrome_options = Options()
     chrome_options.add_argument("--log-level=3") # Suppress logs except fatal ones.
     chrome_options.add_experimental_option('excludeSwitches', ['enable-logging']) # Suppress DevTools messages
-    # chrome_options.add_argument("--headless")  # Disable headless for local testing
+    chrome_options.add_argument("--headless")  # Enable headless for GitHub Actions
     chrome_options.add_argument("--disable-gpu") # Often necessary for headless on Windows
 
     # These options are generally good for stability in Docker/CI environments
@@ -61,7 +61,8 @@ def main():
     try:
         # 1. Scrape Jobs
         logging.info("Starting job scraping...")
-        scraper = LinkedInScraper(driver=driver, cookies_path=config.cookies_file, linkedin_password=config.linkedin_password)
+        notifier = TelegramNotifier(config)
+        scraper = LinkedInScraper(driver=driver, cookies_path=config.cookies_file, linkedin_password=config.linkedin_password, notifier=notifier)
         
         all_jobs = []
         for url in config.search_urls:
@@ -75,7 +76,6 @@ def main():
             logging.info("No new jobs were scraped.")
         else:
             logging.info(f"Scraped a total of {len(all_jobs)} jobs. Starting AI workflow...")
-            notifier = TelegramNotifier(config)
             
             for job in all_jobs:
                 message_groups = run_workflow(job, config)
