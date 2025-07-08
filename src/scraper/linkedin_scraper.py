@@ -72,6 +72,13 @@ class LinkedInScraper(BaseScraper):
         job_elements = self.driver.find_elements(By.CSS_SELECTOR, "div.job-search-card")
         print(f"Found {len(job_elements)} job items to process.")
         
+        # Take a screenshot to verify login and page state
+        try:
+            self.driver.save_screenshot("/app/job_search_ready.png")
+            print("Debug screenshot saved: job_search_ready.png")
+        except:
+            pass
+        
         for index in range(len(job_elements)):
             try:
                 # Re-fetch the list on each iteration to prevent stale element exceptions
@@ -92,6 +99,12 @@ class LinkedInScraper(BaseScraper):
 
             except ElementClickInterceptedException:
                 print(f"Could not click job at index {index}, it was obscured. Skipping.")
+                # Take a screenshot to debug clicking issues
+                try:
+                    self.driver.save_screenshot(f"/app/click_error_{index}.png")
+                    print(f"Debug screenshot saved: click_error_{index}.png")
+                except:
+                    pass
                 continue
             except InvalidSessionIdException:
                 print("Browser session became invalid. Ending scraping for this URL.")

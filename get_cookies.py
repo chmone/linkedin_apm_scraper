@@ -41,10 +41,6 @@ def get_linkedin_cookies():
         
         print(f"✅ Successfully saved {len(cookies)} cookies to cookies.json")
         
-        # Take a screenshot to verify login state
-        driver.save_screenshot('login_verification.png')
-        print("📸 Saved verification screenshot as 'login_verification.png'")
-        
         # Show current page info
         print(f"\n📄 Current page: {driver.title}")
         print(f"🔗 URL: {driver.current_url}")
