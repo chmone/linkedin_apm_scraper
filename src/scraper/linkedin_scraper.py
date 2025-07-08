@@ -42,7 +42,12 @@ class LinkedInScraper(BaseScraper):
             for cookie in cookies:
                 self.driver.add_cookie(cookie)
             self.driver.refresh()
+            
+            # Take screenshot to verify login state
+            time.sleep(2)  # Wait for page to load after cookie refresh
+            self.driver.save_screenshot("/app/debug_0_login_state.png")
             print("Successfully loaded session cookies.")
+            print("Screenshot saved: debug_0_login_state.png")
         except FileNotFoundError:
             print(
                 f"Cookie file not found at {self.cookies_path}. The scraper will operate without being logged in."
@@ -63,8 +68,16 @@ class LinkedInScraper(BaseScraper):
         self.driver.get(search_url)
         print(f"Navigating to search URL: {search_url}")
 
+        # Take screenshot after page load
+        self.driver.save_screenshot("/app/debug_1_after_page_load.png")
+        print("Screenshot saved: debug_1_after_page_load.png")
+
         # Dismiss any modals that might be blocking interactions
         self._dismiss_modals()
+
+        # Take screenshot after modal dismissal
+        self.driver.save_screenshot("/app/debug_2_after_modal_dismiss.png")
+        print("Screenshot saved: debug_2_after_modal_dismiss.png")
 
         try:
             self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.job-search-card")))
@@ -87,8 +100,17 @@ class LinkedInScraper(BaseScraper):
                 job_to_click = job_list[index]
                 self.driver.execute_script("arguments[0].scrollIntoView(true);", job_to_click)
                 time.sleep(1) # a small pause
+                
+                # Take screenshot before clicking job
+                self.driver.save_screenshot(f"/app/debug_3_before_click_job_{index}.png")
+                print(f"Screenshot saved: debug_3_before_click_job_{index}.png")
+                
                 job_to_click.click()
                 time.sleep(2)  # Wait for panel to load
+                
+                # Take screenshot after clicking job
+                self.driver.save_screenshot(f"/app/debug_4_after_click_job_{index}.png")
+                print(f"Screenshot saved: debug_4_after_click_job_{index}.png")
 
                 job_details = self._get_job_details_from_panel(search_url)
                 if job_details:
