@@ -83,6 +83,13 @@ class LinkedInScraper(BaseScraper):
             print("Timeout waiting for job list items to load.")
             return
 
+        # Check for sign-in modal before proceeding
+        if self._check_for_signin_modal():
+            print("Sign-in modal detected. Cannot proceed with job scraping. Login session may have expired.")
+            self.driver.save_screenshot("/app/signin_modal_detected.png")
+            print("Debug screenshot saved: signin_modal_detected.png")
+            return
+
         job_elements = self.driver.find_elements(By.CSS_SELECTOR, "div.job-search-card")
         print(f"Found {len(job_elements)} job items to process.")
         
@@ -100,6 +107,7 @@ class LinkedInScraper(BaseScraper):
                 if index >= len(job_list):
                     print("Index out of bounds, breaking loop.")
                     break
+                
                 
                 job_to_click = job_list[index]
                 self.driver.execute_script("arguments[0].scrollIntoView(true);", job_to_click)
@@ -177,6 +185,43 @@ class LinkedInScraper(BaseScraper):
         except Exception as e:
             print(f"An unexpected error occurred while scraping details panel: {e}")
             return None
+
+    def _check_for_signin_modal(self):
+        """
+        Checks if the 'Sign in to view more jobs' modal is present on the page.
+        Returns True if modal is detected, False otherwise.
+        """
+        signin_modal_selectors = [
+            # Text-based detection
+            "//*[contains(text(), 'Sign in to view more jobs')]",
+            "//*[contains(text(), 'Continue with Google')]", 
+            "//*[contains(text(), 'Sign In') and contains(@class, 'button')]",
+            # Modal container detection
+            ".auth-modal",
+            ".contextual-sign-in-modal",
+            "[data-tracking-control-name*='sign-in-modal']",
+            # Button detection
+            "button[data-tracking-control-name*='contextual-sign-in']",
+            # Generic modal patterns
+            "[role='dialog'][aria-labelledby*='sign']"
+        ]
+        
+        for selector in signin_modal_selectors:
+            try:
+                if selector.startswith("//"):
+                    # XPath selector
+                    elements = self.driver.find_elements(By.XPATH, selector)
+                else:
+                    # CSS selector
+                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                
+                if elements and any(elem.is_displayed() for elem in elements):
+                    print(f"Sign-in modal detected using selector: {selector}")
+                    return True
+            except Exception:
+                continue
+        
+        return False
 
 
 if __name__ == '__main__':
