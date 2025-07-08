@@ -63,19 +63,19 @@ class LinkedInScraper(BaseScraper):
         print(f"Navigating to search URL: {search_url}")
 
         try:
-            self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "li.scaffold-layout__list-item")))
+            self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.job-search-card")))
             print("Job list items found.")
         except TimeoutException:
             print("Timeout waiting for job list items to load.")
             return
 
-        job_elements = self.driver.find_elements(By.CSS_SELECTOR, "li.scaffold-layout__list-item")
+        job_elements = self.driver.find_elements(By.CSS_SELECTOR, "div.job-search-card")
         print(f"Found {len(job_elements)} job items to process.")
         
         for index in range(len(job_elements)):
             try:
                 # Re-fetch the list on each iteration to prevent stale element exceptions
-                job_list = self.driver.find_elements(By.CSS_SELECTOR, "li.scaffold-layout__list-item")
+                job_list = self.driver.find_elements(By.CSS_SELECTOR, "div.job-search-card")
                 if index >= len(job_list):
                     print("Index out of bounds, breaking loop.")
                     break
