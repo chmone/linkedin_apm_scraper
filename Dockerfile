@@ -1,36 +1,29 @@
-# Use an official Python runtime as a parent image
-FROM python:3.11-slim
+# Use the official Selenium image which has Chrome and a non-root user configured.
+FROM selenium/standalone-chrome:latest
 
-# Install system dependencies required for headless Chrome
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    chromium \
-    chromium-driver \
-    && rm -rf /var/lib/apt/lists/*
+# Switch to root user to install Python
+USER root
+
+# Install Python and pip
+RUN apt-get update && apt-get install -y python3 python3-pip --no-install-recommends && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy the requirements file into the container at /app
+# Copy requirements and install Python packages
 COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy the rest of the application's code into the container at /app
+# Copy the rest of the application code
 COPY src/ .
-
-# Define environment variables
-# Note: These should be passed in at runtime, not hardcoded
-ENV GOOGLE_API_KEY=""
-ENV TELEGRAM_BOT_TOKEN=""
-ENV TELEGRAM_CHAT_ID=""
-
-# Copy configuration files
 COPY search_urls.txt .
 COPY cookies.json .
 COPY resume.json .
 COPY ideal_job_profile.txt .
 COPY writing_style_samples/ ./writing_style_samples/
 
-# Run main.py when the container launches
-CMD ["python", "-u", "main.py"] 
+# Switch back to the non-root user for security
+USER seluser
+
+# Run the Python script when the container launches
+CMD ["python3", "-u", "main.py"] 

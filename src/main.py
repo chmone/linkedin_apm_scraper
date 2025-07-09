@@ -13,62 +13,34 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 
 
-def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
+def setup_chrome_driver(headless: bool = True) -> webdriver.Remote:
     """
-    Set up and configure Chrome WebDriver with optimal settings.
-    
+    Set up and configure a connection to a remote Chrome WebDriver.
+
     Args:
-        headless: Whether to run in headless mode
-        
+        headless: Whether to run in headless mode. This is handled by the Selenium container setup.
+
     Returns:
-        Configured Chrome WebDriver instance
+        Configured remote Chrome WebDriver instance.
     """
     chrome_options = Options()
-    chrome_options.add_argument("--log-level=3")  # Suppress logs except fatal ones
-    chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])  # Suppress DevTools messages
-    
-    if headless:
-        chrome_options.add_argument("--headless")  # Enable headless for automated environments
-        
-    chrome_options.add_argument("--disable-gpu")  # Often necessary for headless on Windows
-
-    # These options are generally good for stability in Docker/CI environments
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
+    # Most options are now handled by the Selenium container, but we can still pass specifics.
+    chrome_options.add_argument("--log-level=3")
+    chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
     chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--disable-features=VizDisplayCompositor")  # Additional stability for Docker
-    chrome_options.add_argument("--disable-extensions")
-    chrome_options.add_argument("--disable-plugins")
-    chrome_options.add_argument("--remote-debugging-port=9222")  # For debugging if needed
-
-    # Force a unique user data directory for each run to avoid conflicts
-    user_data_dir = f"/tmp/chrome-user-data-{uuid.uuid4()}"
-    chrome_options.add_argument(f"--user-data-dir={user_data_dir}")
-
-    # Add realistic browser headers to avoid detection
-    chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-    
-    # Additional headers via experimental options
-    chrome_options.add_experimental_option("prefs", {
-        "profile.default_content_setting_values.notifications": 2,  # Block notifications
-        "profile.default_content_settings.popups": 0,  # Block popups
-        "profile.managed_default_content_settings.images": 1  # Load images
-    })
-    
-    # Add headers to make requests look more realistic
-    chrome_options.add_argument("--accept-lang=en-US,en;q=0.9")
-    chrome_options.add_argument("--accept-encoding=gzip, deflate, br")
-    chrome_options.add_argument("--accept=text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
-    
-    # Disable automation indicators
+    chrome_options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_experimental_option("useAutomationExtension", False)
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    
+    # Connect to the Selenium standalone server running in the Docker container
+    return webdriver.Remote(
+        command_executor='http://localhost:4444/wd/hub',
+        options=chrome_options
+    )
 
-    return webdriver.Chrome(options=chrome_options)
 
-
-def scrape_platform_jobs(driver: webdriver.Chrome, platform_name: str, urls: list[str], config, notifier) -> list:
+def scrape_platform_jobs(driver: webdriver.Remote, platform_name: str, urls: list[str], config, notifier) -> list:
     """
     Scrape jobs from a specific platform using the appropriate scraper.
     
