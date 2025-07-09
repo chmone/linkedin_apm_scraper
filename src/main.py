@@ -32,6 +32,17 @@ def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
+    
+    # Fix for user data directory conflict in Docker containers
+    # Create a unique temporary directory for each Chrome instance
+    unique_id = str(uuid.uuid4())[:8]
+    chrome_options.add_argument(f"--user-data-dir=/tmp/chrome-user-data-{unique_id}")
+    chrome_options.add_argument("--no-first-run")
+    chrome_options.add_argument("--disable-default-apps")
+    chrome_options.add_argument("--disable-background-timer-throttling")
+    chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+    chrome_options.add_argument("--disable-renderer-backgrounding")
+    
     chrome_options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_experimental_option("useAutomationExtension", False)
