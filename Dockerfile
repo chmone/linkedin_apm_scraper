@@ -32,5 +32,5 @@ COPY resume.json .
 COPY ideal_job_profile.txt .
 COPY writing_style_samples/ ./writing_style_samples/
 
-# Run main.py when the container launches, referencing its location within the src directory
-CMD ["python", "-u", "src/main.py"] 
+# Run main.py when the container launches
+CMD ["python", "-u", "main.py"] 
