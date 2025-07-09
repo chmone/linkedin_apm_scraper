@@ -55,9 +55,10 @@ COPY resume.json .
 COPY ideal_job_profile.txt .
 COPY writing_style_samples/ ./writing_style_samples/
 
-# Create a non-root user for security
+# Create a non-root user for security (but run as root for Chrome compatibility)
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
-USER appuser
+# Run as root to avoid Chrome permission issues in Docker containers
+# USER appuser
 
 # Run the application directly
 CMD ["python3", "-u", "src/main.py"] 

@@ -2,7 +2,6 @@
 
 import logging
 import time
-import uuid
 
 from config.config import load_config
 from scraper.factory import ScraperFactory
@@ -40,11 +39,10 @@ def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
     chrome_options.add_argument("--disable-in-process-stack-traces")
     
     # Fix for user data directory conflict in Docker containers
-    # Create a unique temporary directory for each Chrome instance
-    unique_id = str(uuid.uuid4())[:8]
-    chrome_options.add_argument(f"--user-data-dir=/tmp/chrome-user-data-{unique_id}")
+    # Remove user-data-dir to let Chrome use default temporary locations
     chrome_options.add_argument("--no-first-run")
     chrome_options.add_argument("--disable-default-apps")
+    chrome_options.add_argument("--no-default-browser-check")
     chrome_options.add_argument("--disable-background-timer-throttling")
     chrome_options.add_argument("--disable-backgrounding-occluded-windows")
     chrome_options.add_argument("--disable-renderer-backgrounding")
