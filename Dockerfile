@@ -1,11 +1,16 @@
 # Use the official Selenium image which has Chrome and a non-root user configured.
 FROM selenium/standalone-chrome:latest
 
-# Switch to root user to install Python
+# Switch to root user to install dependencies
 USER root
 
-# Install Python and pip
-RUN apt-get update && apt-get install -y python3 python3-pip --no-install-recommends && rm -rf /var/lib/apt/lists/*
+# Install Python, pip, and other necessary tools (curl, jq)
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    curl \
+    jq \
+    --no-install-recommends && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory in the container
 WORKDIR /app
@@ -21,9 +26,13 @@ COPY cookies.json .
 COPY resume.json .
 COPY ideal_job_profile.txt .
 COPY writing_style_samples/ ./writing_style_samples/
+COPY start.sh .
+
+# Make the startup script executable
+RUN chmod +x start.sh
 
 # Switch back to the non-root user for security
 USER seluser
 
-# Run the Python script when the container launches
-CMD ["python3", "-u", "main.py"] 
+# Set the startup script as the entrypoint
+ENTRYPOINT ["./start.sh"] 
