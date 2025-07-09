@@ -2,8 +2,6 @@
 
 import logging
 import time
-import tempfile
-import os
 
 from config.config import load_config
 from scraper.factory import ScraperFactory
@@ -16,7 +14,7 @@ from selenium.webdriver.chrome.options import Options
 
 def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
     """
-    Set up and configure Chrome WebDriver with optimal settings for containerized environments.
+    Set up and configure Chrome WebDriver with optimal settings.
     
     Args:
         headless: Whether to run in headless mode
@@ -25,59 +23,43 @@ def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
         Configured Chrome WebDriver instance
     """
     chrome_options = Options()
+    chrome_options.add_argument("--log-level=3")  # Suppress logs except fatal ones
+    chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])  # Suppress DevTools messages
     
-    # Basic logging suppression
-    chrome_options.add_argument("--log-level=3")
-    chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
-    
-    # Enable headless mode if requested
     if headless:
-        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--headless")  # Enable headless for automated environments
         
-    # Essential flags for containerized environments (Docker, GitHub Actions)
+    chrome_options.add_argument("--disable-gpu")  # Often necessary for headless on Windows
+
+    # These options are generally good for stability in Docker/CI environments
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-setuid-sandbox")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--disable-software-rasterizer")
-    chrome_options.add_argument("--disable-background-timer-throttling")
-    chrome_options.add_argument("--disable-backgrounding-occluded-windows")
-    chrome_options.add_argument("--disable-renderer-backgrounding")
-    chrome_options.add_argument("--disable-features=TranslateUI")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--disable-features=VizDisplayCompositor")  # Additional stability for Docker
     chrome_options.add_argument("--disable-extensions")
     chrome_options.add_argument("--disable-plugins")
-    chrome_options.add_argument("--disable-web-security")
-    chrome_options.add_argument("--disable-features=VizDisplayCompositor")
+    chrome_options.add_argument("--remote-debugging-port=9222")  # For debugging if needed
     
-    # Window and display settings
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--start-maximized")
+    # Add realistic browser headers to avoid detection
+    chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     
-    # Remote debugging (useful for containerized environments)
-    chrome_options.add_argument("--remote-debugging-address=0.0.0.0")
-    chrome_options.add_argument("--remote-debugging-port=9222")
+    # Additional headers via experimental options
+    chrome_options.add_experimental_option("prefs", {
+        "profile.default_content_setting_values.notifications": 2,  # Block notifications
+        "profile.default_content_settings.popups": 0,  # Block popups
+        "profile.managed_default_content_settings.images": 1  # Load images
+    })
     
-    # Memory and performance optimizations for containers
-    chrome_options.add_argument("--memory-pressure-off")
-    chrome_options.add_argument("--max_old_space_size=4096")
-    
-    # User agent to avoid detection
-    chrome_options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    # Add headers to make requests look more realistic
+    chrome_options.add_argument("--accept-lang=en-US,en;q=0.9")
+    chrome_options.add_argument("--accept-encoding=gzip, deflate, br")
+    chrome_options.add_argument("--accept=text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
     
     # Disable automation indicators
     chrome_options.add_experimental_option("useAutomationExtension", False)
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    
-    # Prefs for notifications and popups
-    chrome_options.add_experimental_option("prefs", {
-        "profile.default_content_setting_values.notifications": 2,
-        "profile.default_content_settings.popups": 0,
-        "profile.managed_default_content_settings.images": 1
-    })
-    
-    # Don't specify user-data-dir - let Chrome handle it internally
-    
+
     return webdriver.Chrome(options=chrome_options)
 
 
