@@ -2,6 +2,8 @@
 
 import logging
 import time
+import tempfile
+import os
 
 from config.config import load_config
 from scraper.factory import ScraperFactory
@@ -31,14 +33,24 @@ def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
         
     chrome_options.add_argument("--disable-gpu")  # Often necessary for headless on Windows
 
-    # These options are generally good for stability in Docker/CI environments
+    # Critical options for containerized environments (GitHub Actions, Docker)
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-background-timer-throttling")
+    chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+    chrome_options.add_argument("--disable-renderer-backgrounding")
+    chrome_options.add_argument("--disable-features=TranslateUI")
+    chrome_options.add_argument("--disable-ipc-flooding-protection")
+    chrome_options.add_argument("--single-process")  # Important for containerized environments
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--disable-features=VizDisplayCompositor")  # Additional stability for Docker
     chrome_options.add_argument("--disable-extensions")
     chrome_options.add_argument("--disable-plugins")
     chrome_options.add_argument("--remote-debugging-port=9222")  # For debugging if needed
+    
+    # Create a unique temporary directory for user data to avoid conflicts
+    temp_dir = tempfile.mkdtemp()
+    chrome_options.add_argument(f"--user-data-dir={temp_dir}")
     
     # Add realistic browser headers to avoid detection
     chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
