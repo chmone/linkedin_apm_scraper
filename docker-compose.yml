@@ -10,4 +10,5 @@ services:
     volumes:
       - ./screenshots:/app/screenshots
     restart: "no"
+    shm_size: 2g
  
