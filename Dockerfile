@@ -32,12 +32,29 @@ RUN apt-get update && apt-get install -y \
     libxss1 \
     libxtst6 \
     xdg-utils \
+    unzip \
     --no-install-recommends && \
     # Install Chrome
     wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - && \
     echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list && \
     apt-get update && \
     apt-get install -y google-chrome-stable && \
+    # Get Chrome version and install matching ChromeDriver from Chrome for Testing
+    CHROME_VERSION=$(google-chrome --version | awk '{print $3}') && \
+    echo "Chrome version: $CHROME_VERSION" && \
+    # Use Chrome for Testing API for newer Chrome versions
+    CHROMEDRIVER_URL=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json" | \
+    python3 -c "import sys, json; data=json.load(sys.stdin); versions=[v for v in data['versions'] if v['version']=='$CHROME_VERSION']; print(versions[0]['downloads']['chromedriver'][0]['url'] if versions else '')") && \
+    if [ -n "$CHROMEDRIVER_URL" ]; then \
+        echo "Downloading ChromeDriver from: $CHROMEDRIVER_URL" && \
+        wget -q "$CHROMEDRIVER_URL" -O chromedriver.zip && \
+        unzip chromedriver.zip && \
+        mv chromedriver-linux64/chromedriver /usr/local/bin/ && \
+        chmod +x /usr/local/bin/chromedriver && \
+        rm -rf chromedriver.zip chromedriver-linux64; \
+    else \
+        echo "No matching ChromeDriver found, relying on Selenium Manager"; \
+    fi && \
     # Clean up
     rm -rf /var/lib/apt/lists/*
 

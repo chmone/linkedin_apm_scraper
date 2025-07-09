@@ -76,8 +76,35 @@ def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     
     try:
-        # Create Chrome driver with explicit service
-        service = Service()
+        # Check Chrome and ChromeDriver versions for debugging
+        import subprocess
+        import os
+        
+        # Get Chrome version
+        try:
+            chrome_version = subprocess.check_output(['google-chrome', '--version'], text=True).strip()
+            print(f"Chrome version: {chrome_version}")
+        except Exception as e:
+            print(f"Could not get Chrome version: {e}")
+        
+        # Check if our installed ChromeDriver exists and get its version
+        chromedriver_path = '/usr/local/bin/chromedriver'
+        if os.path.exists(chromedriver_path):
+            try:
+                chromedriver_version = subprocess.check_output([chromedriver_path, '--version'], text=True).strip()
+                print(f"ChromeDriver version: {chromedriver_version}")
+                service = Service(executable_path=chromedriver_path)
+            except Exception as e:
+                print(f"Could not get ChromeDriver version: {e}")
+                service = Service()  # Fall back to Selenium Manager
+        else:
+            print("No ChromeDriver at /usr/local/bin/chromedriver, using Selenium Manager")
+            service = Service()
+        
+        # Disable telemetry
+        os.environ['SE_AVOID_STATS'] = 'true'
+        
+        print(f"Creating Chrome driver for temp directory: {temp_dir}")
         driver = webdriver.Chrome(service=service, options=chrome_options)
         
         # Store temp directory for cleanup later
