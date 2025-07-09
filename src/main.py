@@ -2,6 +2,7 @@
 
 import logging
 import time
+import uuid
 
 from config.config import load_config
 from scraper.factory import ScraperFactory
@@ -39,7 +40,11 @@ def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
     chrome_options.add_argument("--disable-extensions")
     chrome_options.add_argument("--disable-plugins")
     chrome_options.add_argument("--remote-debugging-port=9222")  # For debugging if needed
-    
+
+    # Force a unique user data directory for each run to avoid conflicts
+    user_data_dir = f"/tmp/chrome-user-data-{uuid.uuid4()}"
+    chrome_options.add_argument(f"--user-data-dir={user_data_dir}")
+
     # Add realistic browser headers to avoid detection
     chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     
