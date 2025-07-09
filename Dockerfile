@@ -43,9 +43,14 @@ RUN apt-get update && apt-get install -y \
 # Set the working directory
 WORKDIR /app
 
-# Copy requirements and install Python packages
+# Copy requirements and install Python packages in virtual environment
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN python3 -m venv /opt/venv && \
+    /opt/venv/bin/pip install --upgrade pip && \
+    /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+
+# Ensure virtual environment is used
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy application files
 COPY src/ ./src/

@@ -23,6 +23,17 @@ def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
     Returns:
         Configured Chrome WebDriver instance.
     """
+    import os
+    import tempfile
+    import shutil
+    
+    # Create a unique temporary directory for this Chrome instance
+    temp_dir = tempfile.mkdtemp(prefix='chrome_')
+    
+    # Ensure clean environment by killing any existing Chrome processes
+    os.system("pkill -f chrome || true")
+    os.system("pkill -f chromium || true")
+    
     chrome_options = Options()
     
     # Essential Chrome options for containerized environment
@@ -31,30 +42,55 @@ def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--disable-features=VizDisplayCompositor")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--remote-debugging-port=9222")
-    chrome_options.add_argument("--disable-extensions")
-    chrome_options.add_argument("--disable-plugins")
+    chrome_options.add_argument("--single-process")
+    chrome_options.add_argument("--disable-background-networking")
+    chrome_options.add_argument("--disable-background-timer-throttling")
+    chrome_options.add_argument("--disable-renderer-backgrounding")
+    chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+    chrome_options.add_argument("--disable-client-side-phishing-detection")
     chrome_options.add_argument("--disable-crash-reporter")
-    chrome_options.add_argument("--disable-in-process-stack-traces")
+    chrome_options.add_argument("--disable-oopr-debug-crash-dump")
+    chrome_options.add_argument("--no-crash-upload")
+    chrome_options.add_argument("--disable-extensions")
+    chrome_options.add_argument("--disable-low-res-tiling")
+    chrome_options.add_argument("--log-level=3")
+    chrome_options.add_argument("--silent")
+    chrome_options.add_argument("--disable-logging")
+    chrome_options.add_argument("--window-size=1920,1080")
     
-    # Fix for user data directory conflict in Docker containers
-    # Remove user-data-dir to let Chrome use default temporary locations
+    # Explicitly set user data directory to our temp directory
+    chrome_options.add_argument(f"--user-data-dir={temp_dir}")
+    chrome_options.add_argument(f"--data-path={temp_dir}")
+    chrome_options.add_argument(f"--disk-cache-dir={temp_dir}/cache")
+    
+    # Additional stability options
     chrome_options.add_argument("--no-first-run")
+    chrome_options.add_argument("--no-service-autorun")
+    chrome_options.add_argument("--password-store=basic")
+    chrome_options.add_argument("--use-mock-keychain")
+    chrome_options.add_argument("--disable-component-update")
     chrome_options.add_argument("--disable-default-apps")
     chrome_options.add_argument("--no-default-browser-check")
-    chrome_options.add_argument("--disable-background-timer-throttling")
-    chrome_options.add_argument("--disable-backgrounding-occluded-windows")
-    chrome_options.add_argument("--disable-renderer-backgrounding")
     
+    # Stealth options
     chrome_options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_experimental_option("useAutomationExtension", False)
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_argument("--log-level=3")
     
-    # Create Chrome driver directly
-    return webdriver.Chrome(options=chrome_options)
+    try:
+        # Create Chrome driver with explicit service
+        service = Service()
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        
+        # Store temp directory for cleanup later
+        driver._temp_dir = temp_dir
+        
+        return driver
+    except Exception as e:
+        # Clean up temp directory if driver creation fails
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise e
 
 
 def scrape_platform_jobs(driver: webdriver.Chrome, platform_name: str, urls: list[str], config, notifier) -> list:
@@ -195,7 +231,19 @@ def main():
         logging.error(f"An error occurred in the main workflow: {e}", exc_info=True)
     finally:
         logging.info("Closing the WebDriver.")
-        driver.quit()
+        if driver:
+            # Clean up temporary directory if it exists
+            if hasattr(driver, '_temp_dir'):
+                import shutil
+                temp_dir = driver._temp_dir
+                driver.quit()
+                try:
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                    logging.info(f"Cleaned up temporary directory: {temp_dir}")
+                except Exception as e:
+                    logging.warning(f"Failed to cleanup temp directory: {e}")
+            else:
+                driver.quit()
 
 
 if __name__ == '__main__':
