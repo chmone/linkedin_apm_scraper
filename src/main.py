@@ -11,36 +11,38 @@ from notifier.telegram_notifier import TelegramNotifier
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 
 
-def setup_chrome_driver(headless: bool = True) -> webdriver.Remote:
+def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
     """
-    Set up and configure a connection to a remote Chrome WebDriver.
+    Set up and configure a Chrome WebDriver.
 
     Args:
-        headless: Whether to run in headless mode. This is handled by the Selenium container setup.
+        headless: Whether to run in headless mode.
 
     Returns:
-        Configured remote Chrome WebDriver instance.
+        Configured Chrome WebDriver instance.
     """
     chrome_options = Options()
-    # Most options are now handled by the Selenium container, but we can still pass specifics.
-    chrome_options.add_argument("--log-level=3")
-    chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
+    
+    # Essential Chrome options for containerized environment
+    chrome_options.add_argument("--headless") if headless else None
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_experimental_option("useAutomationExtension", False)
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_argument("--log-level=3")
     
-    # Connect to the Selenium standalone server running in the Docker container
-    return webdriver.Remote(
-        command_executor='http://localhost:4444/wd/hub',
-        options=chrome_options
-    )
+    # Create Chrome driver directly
+    return webdriver.Chrome(options=chrome_options)
 
 
-def scrape_platform_jobs(driver: webdriver.Remote, platform_name: str, urls: list[str], config, notifier) -> list:
+def scrape_platform_jobs(driver: webdriver.Chrome, platform_name: str, urls: list[str], config, notifier) -> list:
     """
     Scrape jobs from a specific platform using the appropriate scraper.
     

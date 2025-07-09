@@ -1,6 +1,13 @@
+version: '3.8'
+
 services:
-  app:
+  job-scraper:
     build: .
     env_file:
       - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./screenshots:/app/screenshots
+    restart: "no"
  

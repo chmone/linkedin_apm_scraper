@@ -185,20 +185,34 @@ class Job:
 
 ## Docker Deployment
 
-The project includes Docker support for consistent deployment:
+### Local Docker Deployment
 
-```yaml
-# docker-compose.yml
-services:
-  app:
-    build: .
-    env_file:
-      - .env
-    volumes:
-      - .:/app
+```bash
+# Create .env file with required variables
+cp .env.example .env  # Edit with your values
+
+# Run with Docker Compose
+docker compose up --build
 ```
 
-GitHub Actions workflow automatically runs the scraper every 3 hours.
+### GitHub Actions Deployment
+
+The project includes automated deployment via GitHub Actions that runs every 3 hours.
+
+**Required GitHub Secrets:**
+- `OPENROUTER_API_KEY` - Your OpenRouter API key
+- `TELEGRAM_BOT_TOKEN` - Your Telegram bot token  
+- `TELEGRAM_CHAT_ID` - Your Telegram chat ID
+- `LINKEDIN_PASSWORD` - Your LinkedIn password
+- `COOKIES_JSON` - Your LinkedIn cookies (JSON format)
+
+**Manual trigger:** Go to Actions tab → "LinkedIn Job Scraper" → "Run workflow"
+
+The workflow:
+- ✅ Runs in headless Chrome (no GUI)
+- ✅ 30-minute timeout for reliability
+- ✅ Automatic cleanup after execution
+- ✅ Runs every 3 hours automatically
 
 ## Backward Compatibility
 

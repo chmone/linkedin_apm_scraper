@@ -1,27 +1,37 @@
-name: Run LinkedIn Job Scraper
+name: LinkedIn Job Scraper
 
 on:
-  workflow_dispatch: # Allows manual triggering
+  workflow_dispatch: # Manual trigger
   schedule:
-    - cron: '0 */3 * * *' # Runs every 3 hours
+    - cron: '0 */3 * * *' # Every 3 hours
 
 jobs:
-  run-scraper:
+  scrape-jobs:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Create .env file
+      - name: Create environment file
         run: |
-          echo "OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" >> .env
-          echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
-          echo "TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}" >> .env
+          cat > .env << EOF
+          OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
+          TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}
+          LINKEDIN_PASSWORD=${{ secrets.LINKEDIN_PASSWORD }}
+          EOF
 
-      - name: Create cookies.json file
-        env:
-          COOKIES_JSON_CONTENT: ${{ secrets.COOKIES_JSON }}
-        run: echo "$COOKIES_JSON_CONTENT" > cookies.json
+      - name: Create cookies file
+        run: echo '${{ secrets.COOKIES_JSON }}' > cookies.json
 
-      - name: Run scraper
-        run: docker compose up --build 
+      - name: Run job scraper
+        run: |
+          docker compose up --build --abort-on-container-exit
+          
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down --volumes --remove-orphans
+          docker system prune -f 
