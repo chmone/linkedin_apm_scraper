@@ -1,119 +1,123 @@
 # This is the main orchestrator for the AI-Powered Job Scraper.
 
-import logging
+import tempfile
+import shutil
 import time
+import uuid
+import logging
+import os
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
 
 from config.config import load_config
 from scraper.factory import ScraperFactory
 from agents.workflow import run_workflow
 from notifier.telegram_notifier import TelegramNotifier
 
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-
-
 def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
     """
-    Set up and configure a Chrome WebDriver.
-
-    Args:
-        headless: Whether to run in headless mode.
-
-    Returns:
-        Configured Chrome WebDriver instance.
+    Set up and return a configured Chrome WebDriver instance.
+    Includes Docker-optimized configuration and proper temp directory management.
     """
-    import os
-    import tempfile
-    import shutil
     
-    # Create a unique temporary directory for this Chrome instance
-    temp_dir = tempfile.mkdtemp(prefix='chrome_')
+    # Create a unique temp directory to avoid conflicts in Docker
+    timestamp = int(time.time())
+    unique_id = str(uuid.uuid4())[:8]
+    temp_dir = tempfile.mkdtemp(prefix=f"chrome_profile_{timestamp}_{unique_id}_")
     
-    # Ensure clean environment by killing any existing Chrome processes
-    os.system("pkill -f chrome || true")
-    os.system("pkill -f chromium || true")
-    
+    # Clean up any existing chrome processes and old temp directories
+    try:
+        import subprocess
+        subprocess.run(['pkill', '-f', 'chrome'], capture_output=True, text=True)
+        subprocess.run(['pkill', '-f', 'chromedriver'], capture_output=True, text=True)
+        
+        # Clean up old chrome profile directories
+        temp_base = tempfile.gettempdir()
+        for item in os.listdir(temp_base):
+            if item.startswith('chrome_profile_'):
+                old_dir = os.path.join(temp_base, item)
+                try:
+                    shutil.rmtree(old_dir, ignore_errors=True)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
     chrome_options = Options()
     
-    # Essential Chrome options for containerized environment
-    chrome_options.add_argument("--headless") if headless else None
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--disable-features=VizDisplayCompositor")
-    chrome_options.add_argument("--disable-background-timer-throttling")
-    chrome_options.add_argument("--disable-renderer-backgrounding")
-    chrome_options.add_argument("--disable-backgrounding-occluded-windows")
-    chrome_options.add_argument("--disable-crash-reporter")
-    chrome_options.add_argument("--disable-oopr-debug-crash-dump")
-    chrome_options.add_argument("--no-crash-upload")
-    chrome_options.add_argument("--disable-extensions")
-    chrome_options.add_argument("--disable-low-res-tiling")
-    chrome_options.add_argument("--log-level=3")
-    chrome_options.add_argument("--silent")
-    chrome_options.add_argument("--disable-logging")
-    chrome_options.add_argument("--window-size=1920,1080")
+    # Check for minimal configuration mode
+    use_minimal = os.getenv('CHROME_MINIMAL_CONFIG', 'false').lower() == 'true'
     
-    # Explicitly set user data directory to our temp directory
-    chrome_options.add_argument(f"--user-data-dir={temp_dir}")
-    chrome_options.add_argument(f"--data-path={temp_dir}")
-    chrome_options.add_argument(f"--disk-cache-dir={temp_dir}/cache")
-    
-    # Additional stability options
-    chrome_options.add_argument("--no-first-run")
-    chrome_options.add_argument("--no-service-autorun")
-    chrome_options.add_argument("--password-store=basic")
-    chrome_options.add_argument("--use-mock-keychain")
-    chrome_options.add_argument("--disable-component-update")
-    chrome_options.add_argument("--disable-default-apps")
-    chrome_options.add_argument("--no-default-browser-check")
-    
-    # Stealth options
-    chrome_options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_experimental_option("useAutomationExtension", False)
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    
+    if use_minimal:
+        # Minimal configuration for Docker/container environments
+        chrome_options.add_argument("--headless=new") if headless else None
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        # Use unique user data directory for Docker isolation
+        chrome_options.add_argument(f"--user-data-dir={temp_dir}")
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--no-first-run")
+        chrome_options.add_argument("--disable-default-apps")
+    else:
+        # Full configuration for production use
+        chrome_options.add_argument("--headless") if headless else None
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--disable-features=VizDisplayCompositor")
+        chrome_options.add_argument("--disable-background-timer-throttling")
+        chrome_options.add_argument("--disable-renderer-backgrounding")
+        chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+        chrome_options.add_argument("--disable-crash-reporter")
+        chrome_options.add_argument("--disable-oopr-debug-crash-dump")
+        chrome_options.add_argument("--no-crash-upload")
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-low-res-tiling")
+        chrome_options.add_argument("--log-level=3")
+        chrome_options.add_argument("--silent")
+        chrome_options.add_argument("--disable-notifications")
+        chrome_options.add_argument("--disable-background-networking")
+        chrome_options.add_argument("--disable-background-downloads")
+        chrome_options.add_argument("--disable-translate")
+        chrome_options.add_argument("--disable-ipc-flooding-protection")
+        # Use unique user data directory for Docker isolation
+        chrome_options.add_argument(f"--user-data-dir={temp_dir}")
+        chrome_options.add_argument("--no-first-run")
+        chrome_options.add_argument("--no-service-autorun")
+        chrome_options.add_argument("--no-default-browser-check")
+        chrome_options.add_argument("--password-store=basic")
+        chrome_options.add_argument("--use-mock-keychain")
+        chrome_options.add_argument("--disable-component-update")
+        chrome_options.add_argument("--disable-default-apps")
+        chrome_options.add_argument("--disable-sync")
+        
+        # Performance and stability options
+        chrome_options.add_argument("--max_old_space_size=4096")
+        chrome_options.add_argument("--disable-impl-side-painting")
+        chrome_options.add_argument("--disable-skia-runtime-opts")
+        chrome_options.add_argument("--disable-accelerated-2d-canvas")
+        chrome_options.add_argument("--disable-accelerated-jpeg-decoding")
+        chrome_options.add_argument("--disable-accelerated-mjpeg-decode")
+        chrome_options.add_argument("--disable-accelerated-video-decode")
+        chrome_options.add_argument("--disable-accelerated-video-encode")
+
     try:
-        # Check Chrome and ChromeDriver versions for debugging
-        import subprocess
-        import os
-        
-        # Get Chrome version
-        try:
-            chrome_version = subprocess.check_output(['google-chrome', '--version'], text=True).strip()
-            print(f"Chrome version: {chrome_version}")
-        except Exception as e:
-            print(f"Could not get Chrome version: {e}")
-        
-        # Check if our installed ChromeDriver exists and get its version
-        chromedriver_path = '/usr/local/bin/chromedriver'
-        if os.path.exists(chromedriver_path):
-            try:
-                chromedriver_version = subprocess.check_output([chromedriver_path, '--version'], text=True).strip()
-                print(f"ChromeDriver version: {chromedriver_version}")
-                service = Service(executable_path=chromedriver_path)
-            except Exception as e:
-                print(f"Could not get ChromeDriver version: {e}")
-                service = Service()  # Fall back to Selenium Manager
-        else:
-            print("No ChromeDriver at /usr/local/bin/chromedriver, using Selenium Manager")
-            service = Service()
-        
-        # Disable telemetry
-        os.environ['SE_AVOID_STATS'] = 'true'
-        
-        print(f"Creating Chrome driver for temp directory: {temp_dir}")
+        service = Service()
         driver = webdriver.Chrome(service=service, options=chrome_options)
         
         # Store temp directory for cleanup later
         driver._temp_dir = temp_dir
         
         return driver
+        
     except Exception as e:
-        # Clean up temp directory if driver creation fails
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        # Clean up temp directory on failure
+        try:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        except Exception:
+            pass
         raise e
 
 
@@ -192,6 +196,8 @@ def main():
     """
     The main function to run the AI-Powered Job Scraper with multi-platform support.
     """
+    import os
+    
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     logging.getLogger("httpx").setLevel(logging.WARNING)
 

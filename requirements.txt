@@ -2,4 +2,4 @@ selenium
 openai
 python-telegram-bot
 beautifulsoup4
-python-dotenv 
+python-dotenv
