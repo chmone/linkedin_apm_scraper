@@ -51,7 +51,7 @@ def get_chrome_options_tier1():
 def get_chrome_options_tier2():
     """Aggressive Chrome configuration - Tier 2 for CI/CD."""
     options = Options()
-    options.add_argument("--headless=new")
+    options.add_argument("--headless=new")  # More modern headless mode
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
@@ -143,9 +143,10 @@ def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
             
             chrome_options = get_options_func()
             
-            # Force headless mode if specified
-            if headless and not any('--headless' in arg for arg in chrome_options.arguments):
-                chrome_options.add_argument("--headless=new")
+            # Conditionally apply headless mode based on config
+            if not headless:
+                # Find and remove any headless arguments if they exist
+                chrome_options.arguments = [arg for arg in chrome_options.arguments if '--headless' not in arg]
             
             # Create service
             service = Service()
@@ -199,27 +200,41 @@ def scrape_platform_jobs(driver: webdriver.Chrome, platform_name: str, urls: lis
         logging.warning(f"No configuration found for platform: {platform_name}")
         return all_jobs
     
-    # Create platform-specific scraper using factory
-    scraper_kwargs = {}
-    if platform_name == 'linkedin':
-        # LinkedIn-specific arguments for backward compatibility
-        scraper_kwargs.update({
-            'linkedin_email': config.linkedin_email,
-            'linkedin_password': config.linkedin_password,
-            'notifier': notifier
-        })
-    
     scraper = ScraperFactory.create_scraper(
         driver=driver,
         platform_name=platform_name,
-        config=config,
-        **scraper_kwargs
+        platform_config=platform_config,
+        notifier=notifier
     )
     
     if not scraper:
         logging.error(f"Failed to create scraper for platform: {platform_name}")
         return all_jobs
-    
+
+    # Perform login for platforms that require it (i.e., LinkedIn)
+    if platform_name == 'linkedin':
+        email = platform_config.get_auth_setting('email')
+        password = platform_config.get_auth_setting('password')
+        cookie_filepath = config.linkedin_cookie_filepath
+
+        if not email or not password:
+            logging.error(f"Email or password not configured for {platform_name}. Cannot log in.")
+            return all_jobs
+        
+        logging.info(f"Attempting to log in to {platform_name}...")
+        if not scraper.login(email, password, cookie_filepath):
+            logging.error(f"Login failed for {platform_name}. Skipping platform.")
+            notifier.send_message(f"🚨 LinkedIn login failed! Manual intervention may be required.")
+            return all_jobs
+        
+        # Final authentication check
+        if not scraper.authenticate():
+            logging.error(f"Post-login authentication check failed for {platform_name}. Skipping.")
+            notifier.send_message(f"🚨 LinkedIn session invalid after login! Manual intervention may be required.")
+            return all_jobs
+
+        logging.info(f"Login successful for {platform_name}.")
+
     logging.info(f"Starting to scrape {len(urls)} URLs from {platform_name}")
     
     # Scrape jobs from each URL for this platform

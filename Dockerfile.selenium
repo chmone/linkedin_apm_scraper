@@ -27,6 +27,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy application files
 COPY src/ ./src/
 COPY search_urls.txt .
+COPY platforms.json .
 COPY cookies.json .
 COPY resume.json .
 COPY ideal_job_profile.txt .

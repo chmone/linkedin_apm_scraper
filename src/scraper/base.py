@@ -2,6 +2,9 @@ from abc import ABC, abstractmethod
 from typing import List, Iterator, Dict, Any, Optional
 # We will define the Job data structure in a separate file
 from .models import Job 
+import logging
+import os
+from datetime import datetime
 
 class BaseScraper(ABC):
     """
@@ -9,16 +12,18 @@ class BaseScraper(ABC):
     Defines the common interface for scraping job data from various platforms.
     """
     
-    def __init__(self, driver, platform_config: Optional[Dict[str, Any]] = None, **kwargs):
+    def __init__(self, driver, logger: logging.Logger, platform_config: Optional[Dict[str, Any]] = None, **kwargs):
         """
         Initialize the scraper with a WebDriver and platform-specific configuration.
         
         Args:
             driver: WebDriver instance for browser automation
+            logger: Logger instance for logging
             platform_config: Platform-specific configuration dictionary
             **kwargs: Additional platform-specific arguments
         """
         self.driver = driver
+        self.logger = logger
         self.platform_config = platform_config or {}
         self.platform_name = self.__class__.__name__.replace('Scraper', '').lower()
     
@@ -67,3 +72,25 @@ class BaseScraper(ABC):
             True if URL is valid for this platform, False otherwise
         """
         return True  # Default implementation accepts any URL 
+
+    def take_screenshot(self, name: str) -> None:
+        """
+        Takes a screenshot and saves it to the screenshots directory.
+        
+        Args:
+            name: A descriptive name for the screenshot file.
+        """
+        try:
+            # Ensure the screenshot directory exists
+            screenshots_dir = "screenshots"
+            os.makedirs(screenshots_dir, exist_ok=True)
+            
+            # Create a unique filename
+            filename = f"{name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            filepath = os.path.join(screenshots_dir, filename)
+            
+            # Save the screenshot
+            self.driver.save_screenshot(filepath)
+            self.logger.info(f"Saved screenshot to {filepath}")
+        except Exception as e:
+            self.logger.error(f"Failed to take screenshot: {e}") 
