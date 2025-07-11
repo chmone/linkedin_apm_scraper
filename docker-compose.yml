@@ -10,16 +10,25 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - CHROME_MINIMAL_CONFIG=true
+      - DOCKER_CONTAINER=true
     volumes:
       - ./screenshots:/app/screenshots
       - /dev/shm:/dev/shm  # Shared memory for Chrome
+      - /tmp:/tmp  # Additional temp space
     restart: "no"
-    shm_size: 2g
-    # Add memory limits for better container stability
+    shm_size: 4g  # Increased shared memory for Option C
+    # Enhanced memory limits and security for Option C
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 4G  # Increased for single-process mode
+          cpus: '2'
         reservations:
-          memory: 1G
+          memory: 2G
+          cpus: '1'
+    # Additional Docker optimizations for Chrome
+    cap_add:
+      - SYS_ADMIN  # Required for Chrome sandboxing
+    security_opt:
+      - seccomp:unconfined  # Less restrictive security for Chrome
  

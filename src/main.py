@@ -3,6 +3,7 @@
 import time
 import logging
 import os
+import subprocess
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -12,85 +13,168 @@ from scraper.factory import ScraperFactory
 from agents.workflow import run_workflow
 from notifier.telegram_notifier import TelegramNotifier
 
-def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
-    """
-    Set up and return a configured Chrome WebDriver instance.
-    Optimized for Docker/container environments without user-data-dir conflicts.
-    """
-    
-    # Clean up any existing chrome processes  
+def is_github_actions():
+    """Detect if running in GitHub Actions environment."""
+    return os.getenv('GITHUB_ACTIONS') == 'true' or os.getenv('CI') == 'true'
+
+def is_docker_environment():
+    """Detect if running in Docker container."""
+    return os.path.exists('/.dockerenv') or os.getenv('DOCKER_CONTAINER') == 'true'
+
+def cleanup_chrome_processes():
+    """Aggressively clean up Chrome processes."""
     try:
-        import subprocess
+        # Kill any existing Chrome/ChromeDriver processes
         subprocess.run(['pkill', '-f', 'chrome'], capture_output=True, text=True)
         subprocess.run(['pkill', '-f', 'chromedriver'], capture_output=True, text=True)
-    except Exception:
-        pass
-
-    chrome_options = Options()
-    
-    # Check for minimal configuration mode
-    use_minimal = os.getenv('CHROME_MINIMAL_CONFIG', 'false').lower() == 'true'
-    
-    if use_minimal:
-        # Minimal configuration for Docker/container environments
-        chrome_options.add_argument("--headless=new") if headless else None
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-gpu")
-        # No user-data-dir to avoid Docker conflicts - let Chrome manage its own profile
-        chrome_options.add_argument("--disable-extensions")
-        chrome_options.add_argument("--no-first-run")
-        chrome_options.add_argument("--disable-default-apps")
-    else:
-        # Full configuration for production use
-        chrome_options.add_argument("--headless") if headless else None
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--disable-features=VizDisplayCompositor")
-        chrome_options.add_argument("--disable-background-timer-throttling")
-        chrome_options.add_argument("--disable-renderer-backgrounding")
-        chrome_options.add_argument("--disable-backgrounding-occluded-windows")
-        chrome_options.add_argument("--disable-crash-reporter")
-        chrome_options.add_argument("--disable-oopr-debug-crash-dump")
-        chrome_options.add_argument("--no-crash-upload")
-        chrome_options.add_argument("--disable-extensions")
-        chrome_options.add_argument("--disable-low-res-tiling")
-        chrome_options.add_argument("--log-level=3")
-        chrome_options.add_argument("--silent")
-        chrome_options.add_argument("--disable-notifications")
-        chrome_options.add_argument("--disable-background-networking")
-        chrome_options.add_argument("--disable-background-downloads")
-        chrome_options.add_argument("--disable-translate")
-        chrome_options.add_argument("--disable-ipc-flooding-protection")
-        # No user-data-dir to avoid Docker conflicts - let Chrome manage its own profile
-        chrome_options.add_argument("--no-first-run")
-        chrome_options.add_argument("--no-service-autorun")
-        chrome_options.add_argument("--no-default-browser-check")
-        chrome_options.add_argument("--password-store=basic")
-        chrome_options.add_argument("--use-mock-keychain")
-        chrome_options.add_argument("--disable-component-update")
-        chrome_options.add_argument("--disable-default-apps")
-        chrome_options.add_argument("--disable-sync")
+        subprocess.run(['pkill', '-f', 'chromium'], capture_output=True, text=True)
         
-        # Performance and stability options
-        chrome_options.add_argument("--max_old_space_size=4096")
-        chrome_options.add_argument("--disable-impl-side-painting")
-        chrome_options.add_argument("--disable-skia-runtime-opts")
-        chrome_options.add_argument("--disable-accelerated-2d-canvas")
-        chrome_options.add_argument("--disable-accelerated-jpeg-decoding")
-        chrome_options.add_argument("--disable-accelerated-mjpeg-decode")
-        chrome_options.add_argument("--disable-accelerated-video-decode")
-        chrome_options.add_argument("--disable-accelerated-video-encode")
-
-    try:
-        service = Service()
-        driver = webdriver.Chrome(service=service, options=chrome_options)
+        # Wait a moment for processes to clean up
+        time.sleep(2)
         
-        return driver
-        
+        logging.info("Chrome process cleanup completed")
     except Exception as e:
-        raise e
+        logging.warning(f"Chrome process cleanup failed: {e}")
+
+def get_chrome_options_tier1():
+    """Minimal Chrome configuration - Tier 1."""
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--no-first-run")
+    options.add_argument("--disable-default-apps")
+    return options
+
+def get_chrome_options_tier2():
+    """Aggressive Chrome configuration - Tier 2 for CI/CD."""
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--disable-web-security")
+    options.add_argument("--allow-running-insecure-content")
+    options.add_argument("--disable-features=VizDisplayCompositor")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-plugins")
+    options.add_argument("--disable-images")
+    options.add_argument("--disable-javascript")
+    options.add_argument("--disable-plugins-discovery")
+    options.add_argument("--no-first-run")
+    options.add_argument("--disable-default-apps")
+    options.add_argument("--disable-background-timer-throttling")
+    options.add_argument("--disable-renderer-backgrounding")
+    options.add_argument("--disable-backgrounding-occluded-windows")
+    options.add_argument("--disable-crash-reporter")
+    options.add_argument("--disable-logging")
+    options.add_argument("--log-level=3")
+    options.add_argument("--silent")
+    options.add_argument("--remote-debugging-port=0")  # Dynamic port allocation
+    return options
+
+def get_chrome_options_tier3():
+    """Single-process Chrome configuration - Tier 3 for extreme cases."""
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox") 
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--single-process")  # Run everything in single process
+    options.add_argument("--disable-web-security")
+    options.add_argument("--allow-running-insecure-content")
+    options.add_argument("--disable-features=VizDisplayCompositor,TranslateUI")
+    options.add_argument("--disable-ipc-flooding-protection")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-plugins")
+    options.add_argument("--disable-images")
+    options.add_argument("--no-first-run")
+    options.add_argument("--disable-default-apps")
+    options.add_argument("--disable-background-timer-throttling")
+    options.add_argument("--disable-renderer-backgrounding")
+    options.add_argument("--disable-backgrounding-occluded-windows")
+    options.add_argument("--disable-crash-reporter")
+    options.add_argument("--disable-logging")
+    options.add_argument("--log-level=3")
+    options.add_argument("--silent")
+    options.add_argument("--memory-pressure-off")
+    options.add_argument("--max_old_space_size=4096")
+    return options
+
+def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
+    """
+    Set up Chrome WebDriver with comprehensive Docker optimizations and fallback strategies.
+    Optimized for GitHub Actions and containerized environments.
+    """
+    
+    # Environment detection
+    is_ci = is_github_actions()
+    is_docker = is_docker_environment()
+    
+    logging.info(f"Environment: GitHub Actions={is_ci}, Docker={is_docker}")
+    
+    # Clean up any existing processes
+    cleanup_chrome_processes()
+    
+    # Determine configuration strategy
+    config_tiers = []
+    
+    if is_ci:
+        # GitHub Actions - try aggressive configs first
+        config_tiers = [
+            ("Tier 3 - Single Process", get_chrome_options_tier3),
+            ("Tier 2 - Aggressive CI/CD", get_chrome_options_tier2),
+            ("Tier 1 - Minimal", get_chrome_options_tier1)
+        ]
+    else:
+        # Local/Docker - try minimal first
+        config_tiers = [
+            ("Tier 1 - Minimal", get_chrome_options_tier1),
+            ("Tier 2 - Aggressive CI/CD", get_chrome_options_tier2),
+            ("Tier 3 - Single Process", get_chrome_options_tier3)
+        ]
+    
+    # Try each configuration tier
+    for tier_name, get_options_func in config_tiers:
+        try:
+            logging.info(f"Attempting Chrome startup with {tier_name}")
+            
+            chrome_options = get_options_func()
+            
+            # Force headless mode if specified
+            if headless and not any('--headless' in arg for arg in chrome_options.arguments):
+                chrome_options.add_argument("--headless=new")
+            
+            # Create service
+            service = Service()
+            
+            # Attempt to create driver
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            
+            logging.info(f"✅ Chrome started successfully with {tier_name}")
+            return driver
+            
+        except Exception as e:
+            logging.warning(f"❌ {tier_name} failed: {str(e)}")
+            
+            # Clean up between attempts
+            cleanup_chrome_processes()
+            
+            # Wait before next attempt
+            time.sleep(3)
+            
+            # If this was the last tier, re-raise the exception
+            if tier_name == config_tiers[-1][0]:
+                logging.error(f"All Chrome configuration tiers failed. Last error: {str(e)}")
+                raise e
+            
+            # Continue to next tier
+            continue
+    
+    # Should never reach here, but just in case
+    raise Exception("All Chrome configuration strategies failed")
 
 
 def scrape_platform_jobs(driver: webdriver.Chrome, platform_name: str, urls: list[str], config, notifier) -> list:
