@@ -20,11 +20,9 @@ jobs:
           OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
           TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}
+          LINKEDIN_EMAIL=${{ secrets.LINKEDIN_EMAIL }}
           LINKEDIN_PASSWORD=${{ secrets.LINKEDIN_PASSWORD }}
           EOF
-
-      - name: Create cookies file
-        run: echo '${{ secrets.COOKIES_JSON }}' > cookies.json
 
       - name: Run job scraper
         run: |

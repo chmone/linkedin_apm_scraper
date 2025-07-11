@@ -204,8 +204,8 @@ def scrape_platform_jobs(driver: webdriver.Chrome, platform_name: str, urls: lis
     if platform_name == 'linkedin':
         # LinkedIn-specific arguments for backward compatibility
         scraper_kwargs.update({
-            'cookies_path': platform_config.get_auth_setting('cookies_path', 'cookies.json'),
-            'linkedin_password': platform_config.get_auth_setting('password'),
+            'linkedin_email': config.linkedin_email,
+            'linkedin_password': config.linkedin_password,
             'notifier': notifier
         })
     

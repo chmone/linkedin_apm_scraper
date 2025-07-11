@@ -66,6 +66,7 @@ class Config:
         self.telegram_api_key = os.getenv("TELEGRAM_API_KEY")
         self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
         self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
+        self.linkedin_email = os.getenv("LINKEDIN_EMAIL")
         
         # Load platform configurations
         self.platforms = {}
