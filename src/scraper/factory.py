@@ -77,7 +77,7 @@ class ScraperFactory:
     
     @classmethod
     def create_scraper(cls, driver, platform_name: str = None, url: str = None, 
-                      **kwargs) -> Optional[BaseScraper]:
+                      config=None, **kwargs) -> Optional[BaseScraper]:
         """
         Create a scraper instance for the specified platform or URL.
         
@@ -112,11 +112,15 @@ class ScraperFactory:
         scraper_class = cls._scrapers[target_platform]
         
         try:
-            logger = logging.getLogger(f"scraper.{target_platform}")
+            # Get platform-specific configuration if available
+            platform_config = None
+            if config and hasattr(config, 'get_platform_config'):
+                platform_config = config.get_platform_config(target_platform)
             
+            # Create the scraper instance with platform configuration
             scraper = scraper_class(
                 driver=driver,
-                logger=logger,
+                platform_config=platform_config.scraper_config if platform_config else None,
                 **kwargs
             )
             

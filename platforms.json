@@ -1,10 +1,14 @@
 {
   "linkedin": {
     "enabled": true,
-    "search_urls": [],
+    "search_urls": [
+      "https://www.linkedin.com/jobs/search/?f_PP=102571732%2C102277331&f_TPR=r5000&geoId=103644278&keywords=associate%20product%20manager&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true&sortBy=R"
+    ],
     "auth": {
-      "email": "${LINKEDIN_EMAIL}",
-      "password": "${LINKEDIN_PASSWORD}"
+      "cookies_path": "cookies.json",
+      "password": null,
+      "use_cookies": true,
+      "use_password": false
     },
     "scraper_settings": {
       "headless": true,

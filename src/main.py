@@ -36,11 +36,10 @@ def cleanup_chrome_processes():
     except Exception as e:
         logging.warning(f"Chrome process cleanup failed: {e}")
 
-def get_chrome_options_tier1(headless: bool = True):
+def get_chrome_options_tier1():
     """Minimal Chrome configuration - Tier 1."""
     options = Options()
-    if headless:
-        options.add_argument("--headless=new")
+    options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
@@ -49,11 +48,10 @@ def get_chrome_options_tier1(headless: bool = True):
     options.add_argument("--disable-default-apps")
     return options
 
-def get_chrome_options_tier2(headless: bool = True):
+def get_chrome_options_tier2():
     """Aggressive Chrome configuration - Tier 2 for CI/CD."""
     options = Options()
-    if headless:
-        options.add_argument("--headless=new")  # More modern headless mode
+    options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
@@ -77,11 +75,10 @@ def get_chrome_options_tier2(headless: bool = True):
     options.add_argument("--remote-debugging-port=0")  # Dynamic port allocation
     return options
 
-def get_chrome_options_tier3(headless: bool = True):
+def get_chrome_options_tier3():
     """Single-process Chrome configuration - Tier 3 for extreme cases."""
     options = Options()
-    if headless:
-        options.add_argument("--headless=new")
+    options.add_argument("--headless=new")
     options.add_argument("--no-sandbox") 
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
@@ -144,7 +141,11 @@ def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
         try:
             logging.info(f"Attempting Chrome startup with {tier_name}")
             
-            chrome_options = get_options_func(headless=headless)
+            chrome_options = get_options_func()
+            
+            # Force headless mode if specified
+            if headless and not any('--headless' in arg for arg in chrome_options.arguments):
+                chrome_options.add_argument("--headless=new")
             
             # Create service
             service = Service()
@@ -198,40 +199,38 @@ def scrape_platform_jobs(driver: webdriver.Chrome, platform_name: str, urls: lis
         logging.warning(f"No configuration found for platform: {platform_name}")
         return all_jobs
     
+    # Create platform-specific scraper using factory
+    scraper_kwargs = {}
+    if platform_name == 'linkedin':
+        # LinkedIn-specific arguments for backward compatibility
+        scraper_kwargs.update({
+            'cookies_path': platform_config.get_auth_setting('cookies_path', 'cookies.json'),
+            'linkedin_email': platform_config.get_auth_setting('email'),
+            'linkedin_password': platform_config.get_auth_setting('password'),
+            'notifier': notifier
+        })
+    
     scraper = ScraperFactory.create_scraper(
         driver=driver,
         platform_name=platform_name,
-        platform_config=platform_config,
-        notifier=notifier
+        config=config,
+        **scraper_kwargs
     )
     
     if not scraper:
         logging.error(f"Failed to create scraper for platform: {platform_name}")
         return all_jobs
-
-    # Perform login for platforms that require it (i.e., LinkedIn)
-    if platform_name == 'linkedin':
-        email = platform_config.get_auth_setting('email')
-        password = platform_config.get_auth_setting('password')
-        cookie_filepath = config.linkedin_cookie_filepath
-
-        if not email or not password:
-            logging.error(f"Email or password not configured for {platform_name}. Cannot log in.")
+    
+    logging.info(f"Created {platform_name} scraper successfully")
+    
+    # For LinkedIn scrapers, perform proactive authentication before scraping
+    if platform_name == 'linkedin' and hasattr(scraper, 'authenticate_proactively'):
+        logging.info("Performing proactive authentication for LinkedIn...")
+        auth_success = scraper.authenticate_proactively()
+        if not auth_success:
+            logging.error("LinkedIn proactive authentication failed. Skipping this platform.")
             return all_jobs
-        
-        logging.info(f"Attempting to log in to {platform_name}...")
-        if not scraper.login(email, password, cookie_filepath):
-            logging.error(f"Login failed for {platform_name}. Skipping platform.")
-            notifier.send_message(f"🚨 LinkedIn login failed! Manual intervention may be required.")
-            return all_jobs
-        
-        # Final authentication check
-        if not scraper.authenticate():
-            logging.error(f"Post-login authentication check failed for {platform_name}. Skipping.")
-            notifier.send_message(f"🚨 LinkedIn session invalid after login! Manual intervention may be required.")
-            return all_jobs
-
-        logging.info(f"Login successful for {platform_name}.")
+        logging.info("LinkedIn proactive authentication successful!")
 
     logging.info(f"Starting to scrape {len(urls)} URLs from {platform_name}")
     
@@ -331,7 +330,7 @@ def main():
     finally:
         logging.info("Closing the WebDriver.")
         if driver:
-            driver.quit()
+        driver.quit()
 
 
 if __name__ == '__main__':

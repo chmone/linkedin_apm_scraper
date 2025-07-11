@@ -1,7 +1,6 @@
 import threading
 import os
 import json
-import re
 from dotenv import load_dotenv
 import logging
 from typing import Dict, List, Any, Optional
@@ -17,15 +16,6 @@ class PlatformConfig:
         self.scraper_config = config_data.get('scraper_settings', {})
         self.rate_limit_config = config_data.get('rate_limits', {})
         
-        # Substitute environment variables in auth config
-        self._substitute_env_vars()
-
-    def _substitute_env_vars(self):
-        """Substitute placeholders like ${VAR_NAME} with environment variables."""
-        for key, value in self.auth_config.items():
-            if isinstance(value, str):
-                self.auth_config[key] = os.path.expandvars(value)
-    
     def get_auth_setting(self, key: str, default: Any = None) -> Any:
         """Get platform-specific authentication setting."""
         return self.auth_config.get(key, default)
@@ -67,20 +57,26 @@ class Config:
 
     def _load_config(self):
         """Loads all configuration data from files."""
+        # Load environment variables from .env file
         load_dotenv()
         
         # Global settings
         self.headless = os.getenv("HEADLESS", "false").lower() == "true"
         self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+        self.telegram_api_key = os.getenv("TELEGRAM_API_KEY")
         self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
         self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
-        self.linkedin_cookie_filepath = os.getenv("LINKEDIN_COOKIE_FILEPATH", "cookies.json")
+        
+        # LinkedIn credentials
+        self.linkedin_email = os.getenv("LINKEDIN_EMAIL")
+        self.linkedin_password = os.getenv("LINKEDIN_PASSWORD")
         
         # Load platform configurations
-        self.platforms = self._load_platform_configs()
+        self.platforms = {}
+        self._load_platform_configs()
         
-        # Combine search_urls.txt with urls from platforms.json
-        self._merge_search_urls()
+        # Backward compatibility: Load LinkedIn-specific settings if they exist
+        self._load_legacy_settings()
         
         # Load AI and notification settings
         self.resume_data = json.loads(self._load_file("resume.json"))
@@ -92,31 +88,55 @@ class Config:
         
         print("Configuration loaded.")
 
-    def _load_platform_configs(self) -> Dict[str, PlatformConfig]:
-        """Load platform-specific configurations from platforms.json."""
-        platforms = {}
+    def _load_platform_configs(self):
+        """Load platform-specific configurations."""
+        # Try to load from platforms.json first (new format)
         platforms_config = self._load_json_file("platforms.json")
         
-        if not platforms_config:
-            logging.warning("platforms.json not found or is empty. No platforms will be configured.")
-            return platforms
-
-        for platform_name, platform_data in platforms_config.items():
-            platforms[platform_name] = PlatformConfig(platform_name, platform_data)
-            
-        return platforms
+        if platforms_config:
+            for platform_name, platform_data in platforms_config.items():
+                self.platforms[platform_name] = PlatformConfig(platform_name, platform_data)
+        else:
+            # Create default LinkedIn configuration if no platforms.json exists
+            self._create_default_linkedin_config()
     
-    def _merge_search_urls(self):
-        """Merge search URLs from the legacy search_urls.txt into the platform configs."""
-        legacy_urls = self._load_file("search_urls.txt").splitlines()
-        if legacy_urls:
-            # Assume legacy URLs belong to LinkedIn if it exists
-            if 'linkedin' in self.platforms:
-                # Avoid duplicates
-                existing_urls = set(self.platforms['linkedin'].search_urls)
-                for url in legacy_urls:
-                    if url not in existing_urls:
-                        self.platforms['linkedin'].search_urls.append(url)
+    def _create_default_linkedin_config(self):
+        """Create default LinkedIn configuration for backward compatibility."""
+        search_urls = self._load_file("search_urls.txt").splitlines()
+        linkedin_password = os.getenv("LINKEDIN_PASSWORD")
+        linkedin_email = os.getenv("LINKEDIN_EMAIL")
+        
+        linkedin_config_data = {
+            'enabled': True,
+            'search_urls': search_urls,
+            'auth': {
+                'cookies_path': 'cookies.json',
+                'email': linkedin_email,
+                'password': linkedin_password,
+                'use_cookies': True,
+                'use_password': bool(linkedin_password)
+            },
+            'scraper_settings': {
+                'headless': self.headless,
+                'wait_timeout': 10,
+                'scroll_pause': 0.5,
+                'click_pause': 2
+            },
+            'rate_limits': {
+                'request_delay': 1,
+                'page_delay': 5
+            }
+        }
+        
+        self.platforms['linkedin'] = PlatformConfig('linkedin', linkedin_config_data)
+    
+    def _load_legacy_settings(self):
+        """Load legacy settings for backward compatibility."""
+        # These are kept for backward compatibility with existing code
+        self.linkedin_email = os.getenv("LINKEDIN_EMAIL")
+        self.linkedin_password = os.getenv("LINKEDIN_PASSWORD")
+        self.search_urls = self._load_file("search_urls.txt").splitlines()
+        self.cookies_file = "cookies.json"
 
     def get_platform_config(self, platform_name: str) -> Optional[PlatformConfig]:
         """Get configuration for a specific platform."""
