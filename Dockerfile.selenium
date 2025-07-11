@@ -36,8 +36,5 @@ COPY writing_style_samples/ ./writing_style_samples/
 ENV DISPLAY=:99
 ENV CHROME_MINIMAL_CONFIG=true
 
-# Create a non-root user but keep as root for Chrome compatibility
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
-
-# Run the application directly (as root for Chrome compatibility)
+# Run the application directly (as root for Chrome compatibility in Docker)
 CMD ["python3", "-u", "src/main.py"] 

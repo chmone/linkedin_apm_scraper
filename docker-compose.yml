@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   job-scraper:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.selenium
     env_file:
       - .env
     environment:
