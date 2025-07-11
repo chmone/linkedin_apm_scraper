@@ -1,0 +1,43 @@
+# Option B: Use official Selenium Chrome base image for guaranteed compatibility
+FROM selenium/standalone-chrome:latest
+
+# Switch to root for installations
+USER root
+
+# Install Python and pip
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set the working directory
+WORKDIR /app
+
+# Copy requirements and install Python packages in virtual environment
+COPY requirements.txt .
+RUN python3 -m venv /opt/venv && \
+    /opt/venv/bin/pip install --upgrade pip && \
+    /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+
+# Ensure virtual environment is used
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy application files
+COPY src/ ./src/
+COPY search_urls.txt .
+COPY cookies.json .
+COPY resume.json .
+COPY ideal_job_profile.txt .
+COPY writing_style_samples/ ./writing_style_samples/
+
+# Environment variables for Chrome in Selenium environment
+ENV DISPLAY=:99
+ENV CHROME_MINIMAL_CONFIG=true
+
+# Create a non-root user but keep as root for Chrome compatibility
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+
+# Run the application directly (as root for Chrome compatibility)
+CMD ["python3", "-u", "src/main.py"] 
