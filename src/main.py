@@ -36,10 +36,11 @@ def cleanup_chrome_processes():
     except Exception as e:
         logging.warning(f"Chrome process cleanup failed: {e}")
 
-def get_chrome_options_tier1():
+def get_chrome_options_tier1(headless: bool = True):
     """Minimal Chrome configuration - Tier 1."""
     options = Options()
-    options.add_argument("--headless=new")
+    if headless:
+        options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
@@ -48,10 +49,11 @@ def get_chrome_options_tier1():
     options.add_argument("--disable-default-apps")
     return options
 
-def get_chrome_options_tier2():
+def get_chrome_options_tier2(headless: bool = True):
     """Aggressive Chrome configuration - Tier 2 for CI/CD."""
     options = Options()
-    options.add_argument("--headless=new")  # More modern headless mode
+    if headless:
+        options.add_argument("--headless=new")  # More modern headless mode
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
@@ -75,10 +77,11 @@ def get_chrome_options_tier2():
     options.add_argument("--remote-debugging-port=0")  # Dynamic port allocation
     return options
 
-def get_chrome_options_tier3():
+def get_chrome_options_tier3(headless: bool = True):
     """Single-process Chrome configuration - Tier 3 for extreme cases."""
     options = Options()
-    options.add_argument("--headless=new")
+    if headless:
+        options.add_argument("--headless=new")
     options.add_argument("--no-sandbox") 
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
@@ -141,12 +144,7 @@ def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
         try:
             logging.info(f"Attempting Chrome startup with {tier_name}")
             
-            chrome_options = get_options_func()
-            
-            # Conditionally apply headless mode based on config
-            if not headless:
-                # Find and remove any headless arguments if they exist
-                chrome_options.arguments = [arg for arg in chrome_options.arguments if '--headless' not in arg]
+            chrome_options = get_options_func(headless=headless)
             
             # Create service
             service = Service()
