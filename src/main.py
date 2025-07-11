@@ -1,9 +1,6 @@
 # This is the main orchestrator for the AI-Powered Job Scraper.
 
-import tempfile
-import shutil
 import time
-import uuid
 import logging
 import os
 from selenium import webdriver
@@ -18,29 +15,14 @@ from notifier.telegram_notifier import TelegramNotifier
 def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
     """
     Set up and return a configured Chrome WebDriver instance.
-    Includes Docker-optimized configuration and proper temp directory management.
+    Optimized for Docker/container environments without user-data-dir conflicts.
     """
     
-    # Create a unique temp directory to avoid conflicts in Docker
-    timestamp = int(time.time())
-    unique_id = str(uuid.uuid4())[:8]
-    temp_dir = tempfile.mkdtemp(prefix=f"chrome_profile_{timestamp}_{unique_id}_")
-    
-    # Clean up any existing chrome processes and old temp directories
+    # Clean up any existing chrome processes  
     try:
         import subprocess
         subprocess.run(['pkill', '-f', 'chrome'], capture_output=True, text=True)
         subprocess.run(['pkill', '-f', 'chromedriver'], capture_output=True, text=True)
-        
-        # Clean up old chrome profile directories
-        temp_base = tempfile.gettempdir()
-        for item in os.listdir(temp_base):
-            if item.startswith('chrome_profile_'):
-                old_dir = os.path.join(temp_base, item)
-                try:
-                    shutil.rmtree(old_dir, ignore_errors=True)
-                except Exception:
-                    pass
     except Exception:
         pass
 
@@ -55,8 +37,7 @@ def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
-        # Use unique user data directory for Docker isolation
-        chrome_options.add_argument(f"--user-data-dir={temp_dir}")
+        # No user-data-dir to avoid Docker conflicts - let Chrome manage its own profile
         chrome_options.add_argument("--disable-extensions")
         chrome_options.add_argument("--no-first-run")
         chrome_options.add_argument("--disable-default-apps")
@@ -82,8 +63,7 @@ def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
         chrome_options.add_argument("--disable-background-downloads")
         chrome_options.add_argument("--disable-translate")
         chrome_options.add_argument("--disable-ipc-flooding-protection")
-        # Use unique user data directory for Docker isolation
-        chrome_options.add_argument(f"--user-data-dir={temp_dir}")
+        # No user-data-dir to avoid Docker conflicts - let Chrome manage its own profile
         chrome_options.add_argument("--no-first-run")
         chrome_options.add_argument("--no-service-autorun")
         chrome_options.add_argument("--no-default-browser-check")
@@ -107,17 +87,9 @@ def setup_chrome_driver(headless: bool = True) -> webdriver.Chrome:
         service = Service()
         driver = webdriver.Chrome(service=service, options=chrome_options)
         
-        # Store temp directory for cleanup later
-        driver._temp_dir = temp_dir
-        
         return driver
         
     except Exception as e:
-        # Clean up temp directory on failure
-        try:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-        except Exception:
-            pass
         raise e
 
 
@@ -262,18 +234,7 @@ def main():
     finally:
         logging.info("Closing the WebDriver.")
         if driver:
-            # Clean up temporary directory if it exists
-            if hasattr(driver, '_temp_dir'):
-                import shutil
-                temp_dir = driver._temp_dir
-                driver.quit()
-                try:
-                    shutil.rmtree(temp_dir, ignore_errors=True)
-                    logging.info(f"Cleaned up temporary directory: {temp_dir}")
-                except Exception as e:
-                    logging.warning(f"Failed to cleanup temp directory: {e}")
-            else:
-                driver.quit()
+            driver.quit()
 
 
 if __name__ == '__main__':
