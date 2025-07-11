@@ -204,8 +204,9 @@ def scrape_platform_jobs(driver: webdriver.Chrome, platform_name: str, urls: lis
     if platform_name == 'linkedin':
         # LinkedIn-specific arguments for backward compatibility
         scraper_kwargs.update({
-            'linkedin_email': config.linkedin_email,
-            'linkedin_password': config.linkedin_password,
+            'cookies_path': platform_config.get_auth_setting('cookies_path', 'cookies.json'),
+            'linkedin_email': platform_config.get_auth_setting('email'),
+            'linkedin_password': platform_config.get_auth_setting('password'),
             'notifier': notifier
         })
     
@@ -219,7 +220,18 @@ def scrape_platform_jobs(driver: webdriver.Chrome, platform_name: str, urls: lis
     if not scraper:
         logging.error(f"Failed to create scraper for platform: {platform_name}")
         return all_jobs
+
+    logging.info(f"Created {platform_name} scraper successfully")
     
+    # For LinkedIn scrapers, perform proactive authentication before scraping
+    if platform_name == 'linkedin' and hasattr(scraper, 'authenticate_proactively'):
+        logging.info("Performing proactive authentication for LinkedIn...")
+        auth_success = scraper.authenticate_proactively()
+        if not auth_success:
+            logging.error("LinkedIn proactive authentication failed. Skipping this platform.")
+            return all_jobs
+        logging.info("LinkedIn proactive authentication successful!")
+
     logging.info(f"Starting to scrape {len(urls)} URLs from {platform_name}")
     
     # Scrape jobs from each URL for this platform

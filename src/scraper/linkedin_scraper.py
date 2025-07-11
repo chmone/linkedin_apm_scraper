@@ -26,10 +26,10 @@ class LinkedInScraper(BaseScraper):
     It clicks on each job to reveal the details in a side panel and scrapes the information from there.
     """
 
-    def __init__(self, driver: webdriver.Chrome, platform_config=None, 
-                 linkedin_email: str = None, linkedin_password: str = None, 
-                 notifier=None, **kwargs):
+    def __init__(self, driver: webdriver.Chrome, platform_config=None, cookies_path: str = "cookies.json", 
+                 linkedin_email: str = None, linkedin_password: str = None, notifier=None, **kwargs):
         super().__init__(driver, platform_config, **kwargs)
+        self.cookies_path = cookies_path
         self.linkedin_email = linkedin_email
         self.linkedin_password = linkedin_password
         self.notifier = notifier
@@ -134,48 +134,318 @@ class LinkedInScraper(BaseScraper):
     
     def authenticate(self) -> bool:
         """
-        Perform LinkedIn-specific authentication using email and password.
+        Perform LinkedIn-specific authentication using cookies and password.
         Returns True if authentication was successful, False otherwise.
         """
-        if not self.linkedin_email or not self.linkedin_password:
-            logging.error("LinkedIn email or password not provided in environment variables.")
-            return False
-
+        return self._attempt_login()
+    
+    def authenticate_proactively(self) -> bool:
+        """
+        Proactively authenticate before starting to scrape jobs.
+        This is called once at the beginning to ensure we're logged in.
+        
+        Follows the user's required flow:
+        1. Try to inject cookies
+        2. If "Welcome back" screen with profile, enter password  
+        3. If email field present, enter email + password
+        
+        Returns True if authentication was successful, False otherwise.
+        """
+        print("🔐 Starting proactive LinkedIn authentication...")
+        
         try:
-            logging.info("Attempting full login with email and password...")
-            self.driver.get("https://www.linkedin.com/login")
-            time.sleep(2)
-
-            # Find and fill the email/username field
-            email_field = self.wait.until(EC.presence_of_element_located((By.ID, "username")))
-            email_field.send_keys(self.linkedin_email)
-            logging.info("Filled in email.")
-            time.sleep(0.5)
-
-            # Find and fill the password field
-            password_field = self.wait.until(EC.presence_of_element_located((By.ID, "password")))
-            password_field.send_keys(self.linkedin_password)
-            logging.info("Filled in password.")
-            time.sleep(0.5)
-
-            # Click the sign-in button
-            sign_in_button = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']")))
-            sign_in_button.click()
-            logging.info("Clicked sign-in button.")
-
-            # Wait for login to complete by checking for a known element on the feed page
-            self.wait.until(EC.presence_of_element_located((By.ID, "global-nav-search")))
+            # First, check if we're already logged in by going to LinkedIn feed
+            print("Checking if already logged in...")
+            self.driver.get("https://www.linkedin.com/feed")
+            self._mask_automation_properties()
+            time.sleep(3)
             
-            logging.info("✅ Login successful - redirected to feed or profile!")
-            return True
-
-        except TimeoutException:
-            logging.error("Login failed: Timeout waiting for feed page after login.")
-            self._send_auth_failure_notification("Timeout after login attempt.")
+            # Check if we're already logged in (no sign-in prompts on feed)
+            if self._is_logged_in():
+                print("✅ Already logged in! No authentication needed.")
+                return True
+            
+            # Not logged in, proceed with authentication flow
+            print("Not logged in. Starting authentication process...")
+            
+            # Step 1: Try to inject cookies first
+            success = self._try_cookie_authentication()
+            if success:
+                print("✅ Cookie authentication successful!")
+                return True
+            
+            # Step 2: If cookies didn't work, try fresh login flow
+            print("Cookie authentication failed. Attempting fresh login...")
+            success = self._try_fresh_login()
+            if success:
+                print("✅ Fresh login successful!")
+                return True
+                
+            print("❌ All authentication methods failed.")
             return False
+            
         except Exception as e:
-            logging.error(f"An unexpected error occurred during login: {e}")
-            self._send_auth_failure_notification(f"Unexpected login error: {e}")
+            print(f"❌ Error during proactive authentication: {e}")
+            return False
+    
+    def _is_logged_in(self) -> bool:
+        """
+        Check if we're currently logged in to LinkedIn.
+        Returns True if logged in, False otherwise.
+        """
+        try:
+            # Check for multiple indicators of being logged in
+            current_url = self.driver.current_url
+            page_source = self.driver.page_source.lower()
+            
+            # Look for login indicators - if we see these, we're NOT logged in
+            login_indicators = [
+                "sign in",
+                "log in", 
+                "session_key",
+                "session_password",
+                "join now",
+                "welcome back"
+            ]
+            
+            # Look for logged-in indicators
+            logged_in_indicators = [
+                "global-nav-search",  # Search bar in nav
+                "messaging-", # LinkedIn messaging features
+                "artdeco-button--premium",  # Premium button
+                "profile-photo-edit", # Profile photo edit
+                "feed-nav-item", # Feed navigation
+                '"me":', # JSON data indicating profile
+                "global-nav__primary-item" # Primary navigation items
+            ]
+            
+            # Check URL patterns that indicate login status
+            if any(pattern in current_url.lower() for pattern in ["login", "checkpoint", "challenge", "uas/login"]):
+                print("❌ On login/challenge page - not logged in")
+                return False
+            
+            if any(pattern in current_url.lower() for pattern in ["feed", "in/", "mynetwork", "jobs", "me/"]):
+                # On a logged-in page, but double-check content
+                logged_in_content_found = any(indicator in page_source for indicator in logged_in_indicators)
+                login_content_found = any(indicator in page_source for indicator in login_indicators)
+                
+                if logged_in_content_found and not login_content_found:
+                    print("✅ Confirmed logged in based on URL and page content")
+                    return True
+                elif login_content_found:
+                    print("❌ Login forms detected - not properly logged in")
+                    return False
+            
+            # Fallback: Look for navigation elements that only appear when logged in
+            try:
+                # Try to find the main LinkedIn navigation - this only appears when logged in
+                nav_elements = self.driver.find_elements(By.CSS_SELECTOR, ".global-nav__primary-items, .global-nav__nav, [data-control-name='nav.homepage']")
+                if nav_elements and any(elem.is_displayed() for elem in nav_elements):
+                    print("✅ Found navigation elements - likely logged in")
+                    return True
+            except Exception:
+                pass
+            
+            print("❌ Could not confirm login status - assuming not logged in")
+            return False
+            
+        except Exception as e:
+            print(f"Error checking login status: {e}")
+            return False
+    
+    def _try_cookie_authentication(self) -> bool:
+        """
+        Try to authenticate using saved cookies.
+        Returns True if successful, False otherwise.
+        """
+        try:
+            print("Attempting cookie authentication...")
+            
+            # Navigate to login page to inject cookies
+            self.driver.get("https://www.linkedin.com/login")
+            self._reapply_stealth_javascript()
+            time.sleep(2)
+            
+            # Load and inject cookies
+            try:
+                with open(self.cookies_path, "r") as f:
+                    cookies = json.load(f)
+                
+                print(f"Loading {len(cookies)} cookies...")
+                for cookie in cookies:
+                    # Sanitize the 'sameSite' attribute if it's invalid
+                    if 'sameSite' in cookie and cookie['sameSite'] not in ["Strict", "Lax", "None"]:
+                        del cookie['sameSite']
+                    self.driver.add_cookie(cookie)
+                
+                print("Cookies loaded. Refreshing page...")
+                self.driver.refresh()
+                time.sleep(3)
+                
+                # Check if we're now on welcome back screen or logged in
+                if self._check_for_welcome_back_screen():
+                    print("Welcome back screen detected. Completing password login...")
+                    return self._complete_password_login()
+                elif self._is_logged_in():
+                    print("Cookies successful - already logged in!")
+                    return True
+                else:
+                    print("Cookies loaded but still not logged in")
+                    return False
+                    
+            except FileNotFoundError:
+                print(f"Cookie file not found at '{self.cookies_path}'")
+                return False
+            except json.JSONDecodeError:
+                print("Invalid JSON in cookie file")
+                return False
+                
+        except Exception as e:
+            print(f"Error during cookie authentication: {e}")
+            return False
+    
+    def _try_fresh_login(self) -> bool:
+        """
+        Try fresh login with email and password.
+        Handles both welcome back screen and fresh email entry.
+        Returns True if successful, False otherwise.
+        """
+        try:
+            if not self.linkedin_email or not self.linkedin_password:
+                print("❌ Email or password not provided. Cannot perform fresh login.")
+                print(f"Email provided: {bool(self.linkedin_email)}")
+                print(f"Password provided: {bool(self.linkedin_password)}")
+                return False
+            
+            print("Attempting fresh login with email and password...")
+            
+            # Navigate to login page
+            self.driver.get("https://www.linkedin.com/login")
+            self._reapply_stealth_javascript()
+            time.sleep(2)
+            
+            # Check what type of login screen we're on
+            if self._check_for_welcome_back_screen():
+                print("On welcome back screen - entering password only...")
+                return self._complete_password_login()
+            else:
+                print("On fresh login screen - entering email and password...")
+                return self._complete_fresh_login()
+                
+        except Exception as e:
+            print(f"Error during fresh login: {e}")
+            return False
+    
+    def _complete_fresh_login(self) -> bool:
+        """
+        Complete fresh login by entering email and password.
+        Returns True if successful, False otherwise.
+        """
+        try:
+            # Find and fill email field
+            email_selectors = [
+                "input[name='session_key']",
+                "input[id='username']", 
+                "input[type='email']",
+                "input[autocomplete='username']"
+            ]
+            
+            email_field = None
+            for selector in email_selectors:
+                try:
+                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                    for element in elements:
+                        if element.is_displayed():
+                            email_field = element
+                            break
+                    if email_field:
+                        break
+                except Exception:
+                    continue
+            
+            if not email_field:
+                print("❌ Could not find email field")
+                return False
+            
+            print("Found email field. Entering email...")
+            email_field.clear()
+            email_field.send_keys(self.linkedin_email)
+            time.sleep(1)
+            
+            # Find and fill password field
+            password_selectors = [
+                "input[name='session_password']",
+                "input[id='password']",
+                "input[type='password']"
+            ]
+            
+            password_field = None
+            for selector in password_selectors:
+                try:
+                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                    for element in elements:
+                        if element.is_displayed():
+                            password_field = element
+                            break
+                    if password_field:
+                        break
+                except Exception:
+                    continue
+            
+            if not password_field:
+                print("❌ Could not find password field")
+                return False
+            
+            print("Found password field. Entering password...")
+            password_field.clear()
+            password_field.send_keys(self.linkedin_password)
+            time.sleep(1)
+            
+            # Find and click sign in button
+            signin_selectors = [
+                "button[data-litms-control-urn='login-submit']",
+                "button[type='submit']",
+                ".login__form_action_container button",
+                "input[type='submit']",
+                "button:contains('Sign in')"
+            ]
+            
+            signin_button = None
+            for selector in signin_selectors:
+                try:
+                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                    for element in elements:
+                        if element.is_displayed():
+                            signin_button = element
+                            break
+                    if signin_button:
+                        break
+                except Exception:
+                    continue
+            
+            if not signin_button:
+                print("❌ Could not find sign in button")
+                return False
+            
+            print("Found sign in button. Clicking to login...")
+            signin_button.click()
+            time.sleep(5)  # Wait longer for login processing
+            
+            # Check if login was successful
+            if self._is_logged_in():
+                print("✅ Fresh login successful!")
+                return True
+            else:
+                current_url = self.driver.current_url
+                if "challenge" in current_url or "checkpoint" in current_url:
+                    print("⚠️ Login requires additional verification (CAPTCHA/2FA)")
+                    return False
+                else:
+                    print("❌ Fresh login failed - still not logged in")
+                    return False
+                    
+        except Exception as e:
+            print(f"Error completing fresh login: {e}")
             return False
     
     def validate_url(self, url: str) -> bool:
@@ -192,39 +462,256 @@ class LinkedInScraper(BaseScraper):
     
     def _attempt_login(self) -> bool:
         """
-        DEPRECATED: This method is no longer used for primary authentication.
         Attempt to authenticate by loading cookies when we detect we need login.
         Returns True if authentication appears successful, False otherwise.
         """
-        return False # Deprecating cookie-based login
-
+        try:
+            print("Loading cookies for authentication...")
+            
+            # Navigate to the signin page first - this is where authentication context is most appropriate
+            print("Navigating to LinkedIn signin page to inject cookies...")
+            self.driver.get("https://www.linkedin.com/login")
+            time.sleep(2)  # Allow page to fully load
+            
+            # Apply stealth JavaScript on login page
+            self._reapply_stealth_javascript()
+            
+            with open(self.cookies_path, "r") as f:
+                cookies = json.load(f)
+            
+            print(f"Loading {len(cookies)} cookies...")
+            for cookie in cookies:
+                # Sanitize the 'sameSite' attribute if it's invalid.
+                # Some browser extensions export this with values Selenium doesn't recognize.
+                if 'sameSite' in cookie and cookie['sameSite'] not in ["Strict", "Lax", "None"]:
+                    del cookie['sameSite']
+                self.driver.add_cookie(cookie)
+            
+            print("Successfully loaded session cookies.")
+            
+            # After loading cookies, wait for page to refresh and show the "Welcome back" screen
+            print("Waiting for page to refresh to show Welcome back screen...")
+            time.sleep(2)  # Give time for cookies to process
+            
+            # Refresh the page to ensure cookies take effect
+            self.driver.refresh()
+            time.sleep(1)  # Wait for refresh to complete
+            
+            # Wait for the Welcome back screen to appear
+            welcome_back_detected = self._wait_for_welcome_back_screen(timeout=10)
+            
+            if welcome_back_detected:
+                print("Detected 'Welcome back' screen. Completing login with password...")
+                
+                if not self.linkedin_password:
+                    print("Error: LinkedIn password not provided in environment variables.")
+                    return False
+                
+                # Complete the login by filling password and clicking sign in
+                login_success = self._complete_password_login()
+                if not login_success:
+                    print("Failed to complete password login.")
+                    return False
+                
+                print("Password login completed successfully! Authentication complete.")
+                return True
+            else:
+                print("No 'Welcome back' screen detected. May already be fully logged in.")
+                return True
+                
+        except FileNotFoundError:
+            print(f"Cookie file not found at '{self.cookies_path}'. Cannot authenticate.")
+            return False
+        except Exception as e:
+            print(f"An error occurred during authentication: {e}")
+            return False
+    
     def _check_for_welcome_back_screen(self) -> bool:
         """
-        DEPRECATED: No longer needed with direct login.
+        Check if we're on the 'Welcome back' screen that requires password completion.
+        Returns True ONLY if we're on the specific welcome back screen with the user's name.
         """
-        return False
+        try:
+            print("Checking for Welcome back screen...")
+            
+            # First, look for the specific "Welcome back" heading text
+            welcome_text_selectors = [
+                "//h1[contains(text(), 'Welcome back')]",
+                "//*[contains(text(), 'Welcome back')]"
+            ]
+            
+            welcome_text_found = False
+            for selector in welcome_text_selectors:
+                try:
+                    elements = self.driver.find_elements(By.XPATH, selector)
+                    if elements and any(elem.is_displayed() for elem in elements):
+                        print(f"Welcome back text found using selector: {selector}")
+                        welcome_text_found = True
+                        break
+                except Exception:
+                    continue
+            
+            # Only if we found "Welcome back" text, then check for password field
+            if welcome_text_found:
+                password_selectors = [
+                    "input[name='session_password']",
+                    "input[type='password']",
+                    "#password"
+                ]
+                
+                for selector in password_selectors:
+                    try:
+                        elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                        if elements and any(elem.is_displayed() for elem in elements):
+                            print(f"Welcome back screen confirmed - password field found: {selector}")
+                            return True
+                    except Exception:
+                        continue
+                
+                print("Welcome back text found but no password field - may already be logged in")
+                return False
+            else:
+                print("No 'Welcome back' text found - not on welcome back screen")
+                return False
+                
+        except Exception as e:
+            print(f"Error checking for welcome back screen: {e}")
+            return False
     
     def _wait_for_welcome_back_screen(self, timeout: int = 15) -> bool:
         """
-        DEPRECATED: No longer needed with direct login.
+        Wait for the Welcome back screen to appear after loading cookies.
+        Returns True if welcome back screen appears, False if timeout.
         """
-        return False
-
-    def _complete_password_login(self) -> bool:
-        """
-        DEPRECATED: No longer needed with direct login.
-        """
+        print(f"Waiting up to {timeout} seconds for Welcome back screen to appear...")
+        
+        for attempt in range(timeout):
+            if self._check_for_welcome_back_screen():
+                return True
+            time.sleep(1)
+        
+        print("Timeout waiting for Welcome back screen.")
         return False
     
+    def _complete_password_login(self) -> bool:
+        """
+        Complete the login process by filling in the password and clicking sign in.
+        Returns True if login appears successful, False otherwise.
+        """
+        try:
+            # Find and fill the password field
+            password_selectors = [
+                "input[name='session_password']",
+                "input[type='password']",
+                "#password",
+                "input[id*='password']"
+            ]
+            
+            password_field = None
+            for selector in password_selectors:
+                try:
+                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                    for element in elements:
+                        if element.is_displayed():
+                            password_field = element
+                            break
+                    if password_field:
+                        break
+                except Exception:
+                    continue
+            
+            if not password_field:
+                print("Could not find password field.")
+                return False
+            
+            print("Found password field. Filling in password...")
+            password_field.clear()
+            password_field.send_keys(self.linkedin_password)
+            time.sleep(1)
+            
+            # Find and click the sign in button
+            signin_selectors = [
+                "button[data-litms-control-urn='login-submit']",
+                "button[type='submit']",
+                "button:contains('Sign in')",
+                ".login__form_action_container button",
+                "input[type='submit']"
+            ]
+            
+            signin_button = None
+            for selector in signin_selectors:
+                try:
+                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                    for element in elements:
+                        if element.is_displayed():
+                            signin_button = element
+                            break
+                    if signin_button:
+                        break
+                except Exception:
+                    continue
+            
+            if not signin_button:
+                print("Could not find sign in button.")
+                return False
+            
+            print("Found sign in button. Clicking to complete login...")
+            signin_button.click()
+            time.sleep(3)  # Wait for LinkedIn to process login
+            
+            # Check if login was successful by looking at the current URL and page content
+            current_url = self.driver.current_url
+            print(f"Current URL after login attempt: {current_url}")
+            
+            # Check for login success indicators
+            if "linkedin.com/feed" in current_url or "linkedin.com/in/" in current_url:
+                print("✅ Login successful - redirected to feed or profile!")
+                return True
+            elif "linkedin.com/login" in current_url or "linkedin.com/uas/login" in current_url:
+                print("❌ Login failed - still on login page")
+                return False
+            elif "challenge" in current_url or "checkpoint" in current_url:
+                print("⚠️  Login requires additional verification (CAPTCHA/email)")
+                return False
+            else:
+                # Check page content for success/failure indicators
+                page_text = self.driver.page_source.lower()
+                if "welcome back" in page_text and "password" in page_text:
+                    print("❌ Still on welcome back screen - login may have failed")
+                    return False
+                elif "feed" in page_text or "home" in page_text:
+                    print("✅ Login appears successful based on page content")
+                    return True
+                else:
+                    print(f"⚠️  Uncertain login status. Current URL: {current_url}")
+                    return False
+            
+        except Exception as e:
+            print(f"Error completing password login: {e}")
+            return False
+
     def _load_cookies(self):
-        """
-        DEPRECATED: No longer used.
-        """
-        pass
-        
+        """Loads session cookies into the browser to maintain the user's session."""
+        try:
+            # We must be on the linkedin.com domain to set cookies for it.
+            self.driver.get("https://www.linkedin.com")
+            with open(self.cookies_path, "r") as f:
+                cookies = json.load(f)
+            for cookie in cookies:
+                # Sanitize the 'sameSite' attribute if it's invalid.
+                # Some browser extensions export this with values Selenium doesn't recognize.
+                if 'sameSite' in cookie and cookie['sameSite'] not in ["Strict", "Lax", "None"]:
+                    del cookie['sameSite']
+                self.driver.add_cookie(cookie)
+            print("Successfully loaded session cookies.")
+        except FileNotFoundError:
+            print(f"Cookie file not found at '{self.cookies_path}'. Proceeding without authentication.")
+        except Exception as e:
+            print(f"An error occurred while loading cookies: {e}")
+
     def scrape(self, search_url: str) -> Iterator[Job]:
         """
-        Scrapes job listings from a LinkedIn search URL.
+        Scrapes a LinkedIn job search URL by clicking each job and extracting details from the side panel.
 
         Args:
             search_url: The URL of the LinkedIn job search results page.
@@ -232,28 +719,47 @@ class LinkedInScraper(BaseScraper):
         Yields:
             A Job object for each successfully scraped job posting.
         """
-        logging.info(f"Navigating to search URL: {search_url}")
+        # Perform proactive authentication before starting to scrape
+        print("🔐 Performing proactive authentication before scraping...")
+        auth_success = self.authenticate_proactively()
+        if not auth_success:
+            print("❌ Proactive authentication failed. Cannot proceed with job scraping.")
+            self._send_auth_failure_notification("Proactive authentication failed")
+            return
+        
+        print(f"Navigating to search URL: {search_url}")
         self.driver.get(search_url)
+        
+        # Apply JavaScript masking for this page
         self._mask_automation_properties()
-
-        # Check if we need to log in by looking for a sign-in modal or button
+        
+        # Verify we're still authenticated after visiting the search URL
+        print("🔍 Verifying authentication after visiting search URL...")
+        time.sleep(2)  # Give page time to load
+        
+        # Check for sign-in modal - if detected, try to authenticate again
         if self._check_for_signin_modal():
-            logging.info("Sign-in modal detected. Attempting to authenticate...")
-            if not self.authenticate():
-                logging.error("Authentication failed. Cannot continue scraping.")
-                self._send_auth_failure_notification("Failed to log in with email/password.")
-                return [] # Stop scraping if authentication fails
+            print("⚠️ Sign-in modal detected after visiting search URL. Attempting re-authentication...")
             
-            # After successful login, re-navigate to the search URL
-            logging.info("Authentication successful. Returning to search page...")
+            # Try authentication one more time
+            success = self._attempt_login()
+            if not success:
+                print("❌ Re-authentication failed. Cannot proceed with job scraping.")
+                self._send_auth_failure_notification("Re-authentication after visiting search URL failed")
+                return
+            
+            # Navigate back to search URL after successful re-authentication
+            print("✅ Re-authentication successful. Returning to search page...")
             self.driver.get(search_url)
             self._reapply_stealth_javascript()
-
-        # Additional check after re-navigation
-        if self._check_for_signin_modal():
-            logging.error("Still seeing sign-in modal after authentication. Login may have failed.")
-            self._send_auth_failure_notification("Sign-in modal still present after login attempt.")
-            return []
+            
+            # Final check for sign-in modal
+            if self._check_for_signin_modal():
+                print("❌ Still seeing sign-in modal after re-authentication. Login may have failed.")
+                self._send_auth_failure_notification("Sign-in modal still present after re-authentication")
+                return
+        else:
+            print("✅ No sign-in modal detected. Authentication verified.")
 
         # Use streamlined approach to get all jobs from the table directly
         print("Looking for job elements using optimized path...")

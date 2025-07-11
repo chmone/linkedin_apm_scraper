@@ -66,7 +66,10 @@ class Config:
         self.telegram_api_key = os.getenv("TELEGRAM_API_KEY")
         self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
         self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
+        
+        # LinkedIn credentials
         self.linkedin_email = os.getenv("LINKEDIN_EMAIL")
+        self.linkedin_password = os.getenv("LINKEDIN_PASSWORD")
         
         # Load platform configurations
         self.platforms = {}
@@ -101,12 +104,14 @@ class Config:
         """Create default LinkedIn configuration for backward compatibility."""
         search_urls = self._load_file("search_urls.txt").splitlines()
         linkedin_password = os.getenv("LINKEDIN_PASSWORD")
+        linkedin_email = os.getenv("LINKEDIN_EMAIL")
         
         linkedin_config_data = {
             'enabled': True,
             'search_urls': search_urls,
             'auth': {
                 'cookies_path': 'cookies.json',
+                'email': linkedin_email,
                 'password': linkedin_password,
                 'use_cookies': True,
                 'use_password': bool(linkedin_password)
@@ -128,6 +133,7 @@ class Config:
     def _load_legacy_settings(self):
         """Load legacy settings for backward compatibility."""
         # These are kept for backward compatibility with existing code
+        self.linkedin_email = os.getenv("LINKEDIN_EMAIL")
         self.linkedin_password = os.getenv("LINKEDIN_PASSWORD")
         self.search_urls = self._load_file("search_urls.txt").splitlines()
         self.cookies_file = "cookies.json"
