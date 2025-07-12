@@ -231,7 +231,7 @@ def scrape_platform_jobs(driver: webdriver.Chrome, platform_name: str, urls: lis
             logging.error("LinkedIn proactive authentication failed. Skipping this platform.")
             return all_jobs
         logging.info("LinkedIn proactive authentication successful!")
-
+    
     logging.info(f"Starting to scrape {len(urls)} URLs from {platform_name}")
     
     # Scrape jobs from each URL for this platform
@@ -330,7 +330,7 @@ def main():
     finally:
         logging.info("Closing the WebDriver.")
         if driver:
-        driver.quit()
+            driver.quit()
 
 
 if __name__ == '__main__':
