@@ -222,7 +222,6 @@ def scrape_platform_jobs(driver: webdriver.Chrome, platform_name: str, urls: lis
         return all_jobs
 
     logging.info(f"Created {platform_name} scraper successfully")
-    
     # For LinkedIn scrapers, perform proactive authentication before scraping
     if platform_name == 'linkedin' and hasattr(scraper, 'authenticate_proactively'):
         logging.info("Performing proactive authentication for LinkedIn...")
